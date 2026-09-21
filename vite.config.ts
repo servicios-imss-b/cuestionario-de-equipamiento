@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
     : '';
 
   return {
-    base: '/nuevo-formu/',
+    base: '/cuestionario-de-equipamiento/',
     publicDir: false as const,
     define: {
       'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(env.SUPABASE_URL || ''),
