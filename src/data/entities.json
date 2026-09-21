@@ -1,0 +1,140 @@
+[
+  {
+    "id": "01",
+    "name": "BAJA CALIFORNIA",
+    "code": "01",
+    "totalUnits": 107
+  },
+  {
+    "id": "02",
+    "name": "BAJA CALIFORNIA SUR",
+    "code": "02",
+    "totalUnits": 57
+  },
+  {
+    "id": "03",
+    "name": "CAMPECHE",
+    "code": "03",
+    "totalUnits": 90
+  },
+  {
+    "id": "04",
+    "name": "CHIAPAS",
+    "code": "04",
+    "totalUnits": 482
+  },
+  {
+    "id": "05",
+    "name": "CIUDAD DE MEXICO",
+    "code": "05",
+    "totalUnits": 213
+  },
+  {
+    "id": "06",
+    "name": "COLIMA",
+    "code": "06",
+    "totalUnits": 116
+  },
+  {
+    "id": "07",
+    "name": "GUERRERO",
+    "code": "07",
+    "totalUnits": 926
+  },
+  {
+    "id": "08",
+    "name": "HIDALGO",
+    "code": "08",
+    "totalUnits": 484
+  },
+  {
+    "id": "09",
+    "name": "MEXICO",
+    "code": "09",
+    "totalUnits": 1044
+  },
+  {
+    "id": "10",
+    "name": "MICHOACAN DE OCAMPO",
+    "code": "10",
+    "totalUnits": 356
+  },
+  {
+    "id": "11",
+    "name": "MORELOS",
+    "code": "11",
+    "totalUnits": 204
+  },
+  {
+    "id": "12",
+    "name": "NAYARIT",
+    "code": "12",
+    "totalUnits": 198
+  },
+  {
+    "id": "13",
+    "name": "OAXACA",
+    "code": "13",
+    "totalUnits": 750
+  },
+  {
+    "id": "14",
+    "name": "PUEBLA",
+    "code": "14",
+    "totalUnits": 594
+  },
+  {
+    "id": "15",
+    "name": "QUINTANA ROO",
+    "code": "15",
+    "totalUnits": 170
+  },
+  {
+    "id": "16",
+    "name": "SAN LUIS POTOSI",
+    "code": "16",
+    "totalUnits": 184
+  },
+  {
+    "id": "17",
+    "name": "SINALOA",
+    "code": "17",
+    "totalUnits": 209
+  },
+  {
+    "id": "18",
+    "name": "SONORA",
+    "code": "18",
+    "totalUnits": 222
+  },
+  {
+    "id": "19",
+    "name": "TABASCO",
+    "code": "19",
+    "totalUnits": 505
+  },
+  {
+    "id": "20",
+    "name": "TAMAULIPAS",
+    "code": "20",
+    "totalUnits": 287
+  },
+  {
+    "id": "21",
+    "name": "TLAXCALA",
+    "code": "21",
+    "totalUnits": 179
+  },
+  {
+    "id": "22",
+    "name": "VERACRUZ DE IGNACIO DE LA LLAVE",
+    "code": "22",
+    "totalUnits": 733
+  },
+  {
+    "id": "23",
+    "name": "ZACATECAS",
+    "code": "23",
+    "totalUnits": 151
+  }
+]
