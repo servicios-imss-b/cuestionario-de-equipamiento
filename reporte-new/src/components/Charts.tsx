@@ -155,7 +155,9 @@ const STAT_CARDS: StatCardDef[] = [
 ];
 
 function pct2Digits(value: number): string {
-  const rounded = Math.round(Number(value) || 0);
+  const numericValue = Number(value) || 0;
+  if (numericValue > 0 && numericValue < 1) return `${numericValue.toFixed(2)}%`;
+  const rounded = Math.round(numericValue);
   if (rounded >= 100) return `${rounded}%`;
   return `${String(rounded).padStart(2, '0')}%`;
 }
