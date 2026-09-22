@@ -377,16 +377,22 @@ export default function App() {
     });
   };
 
+  const uniqueCluesCount = new Set(
+    resultado
+      .map((row) => toText(row.clues_imb || row.CLUES_IMB || row.clues))
+      .filter(Boolean),
+  ).size;
+
   const allDataTabs: { key: DataTabKey; label: string; icon: typeof Database; count: number }[] = [
     { key: 'cruda', label: 'Base Cruda', icon: Database, count: baseAn.length },
-    { key: 'clues', label: 'Por CLUES', icon: Building2, count: resultado.length },
+    { key: 'clues', label: 'Por CLUES', icon: Building2, count: uniqueCluesCount },
     { key: 'estado', label: 'Por Estado', icon: Layers3, count: resumenEntidad.length },
     { key: 'faltantes', label: 'Faltantes', icon: AlertTriangle, count: faltantes.length },
     { key: 'tabla-avance', label: 'Tabla avance', icon: Gauge, count: tablaAvance.length },
     { key: 'tabla-entidades', label: 'Tabla entidades', icon: Layers3, count: tablaEntidades.length },
     { key: 'tabla-unidades', label: 'Tabla unidades', icon: Building2, count: tablaUnidadesAvance.length },
-    { key: 'faltantes-estados', label: 'Faltantes por estados', icon: AlertTriangle, count: faltantesPorEstados.length },
-    { key: 'tabla-faltantes-estados', label: 'Tabla faltantes por estados', icon: AlertTriangle, count: tablaFaltantesPorEstados.length },
+    { key: 'faltantes-estados', label: 'Faltantes por CLUES', icon: AlertTriangle, count: faltantesPorEstados.length },
+    { key: 'tabla-faltantes-estados', label: 'Tabla faltantes por CLUES', icon: AlertTriangle, count: tablaFaltantesPorEstados.length },
   ];
 
   const dataTabs = allDataTabs.filter(({ key }) => key !== 'cruda' || crudaUnlocked);
@@ -687,11 +693,11 @@ export default function App() {
                     )}
 
                     {dataTab === 'faltantes-estados' && (
-                      <DataTable<DataRow> exportFileName="faltantes_por_estados" exportSheetName="Faltantes por estados" data={faltantesPorEstados} columns={tableColumns(faltantesPorEstados, false)} exportColumns={tableColumns(faltantesPorEstados, true)} />
+                      <DataTable<DataRow> exportFileName="faltantes_por_clues" exportSheetName="Faltantes por CLUES" data={faltantesPorEstados} columns={tableColumns(faltantesPorEstados, false)} exportColumns={tableColumns(faltantesPorEstados, true)} />
                     )}
 
                     {dataTab === 'tabla-faltantes-estados' && (
-                      <DataTable<DataRow> exportFileName="tabla_faltantes_por_estados" exportSheetName="Tabla faltantes estados" data={tablaFaltantesPorEstados} columns={tableColumns(tablaFaltantesPorEstados, false)} exportColumns={tableColumns(tablaFaltantesPorEstados, true)} />
+                      <DataTable<DataRow> exportFileName="tabla_faltantes_por_clues" exportSheetName="Tabla faltantes por CLUES" data={tablaFaltantesPorEstados} columns={tableColumns(tablaFaltantesPorEstados, false)} exportColumns={tableColumns(tablaFaltantesPorEstados, true)} />
                     )}
                   </div>
               )}
