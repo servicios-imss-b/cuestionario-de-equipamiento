@@ -31,10 +31,9 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
-app.use(
-  '/nuevo-formu/reporte-new/docs',
-  express.static(path.join(__dirname, 'reporte-new', 'docs'))
-);
+const reportDocsPath = path.join(__dirname, 'reporte-new', 'docs');
+app.use('/cuestionario-de-equipamiento/reporte-new/docs', express.static(reportDocsPath));
+app.use('/nuevo-formu/reporte-new/docs', express.static(reportDocsPath));
 
 // In-Memory & Resilient Server Storage (with Supabase fallback)
 interface StoredAnswer {
