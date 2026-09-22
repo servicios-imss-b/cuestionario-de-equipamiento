@@ -9,6 +9,10 @@ interface ExpectedUnit {
   entity: string;
 }
 
+const correctedUnitNames = new Map(
+  (units as ExpectedUnit[]).map((unit) => [normalize(unit.clues), String(unit.name ?? '').trim()]),
+);
+
 interface SupabaseRow {
   fecha_registro: string | null;
   tipo_registro: 'unidad' | 'respuesta' | 'consultorio' | 'horario';
@@ -59,6 +63,17 @@ const EQUIPMENT_QUESTION_COUNT = questions.length;
 
 function normalize(value: unknown): string {
   return String(value ?? '').trim().toUpperCase();
+}
+
+function correctedUnitName(clues: unknown, fallback: unknown): string {
+  return correctedUnitNames.get(normalize(clues)) ?? String(fallback ?? '').trim();
+}
+
+function applyCorrectedUnitName(row: DataRow): DataRow {
+  return {
+    ...row,
+    nombre_de_la_unidad: correctedUnitName(row.clues_imb ?? row.clues, row.nombre_de_la_unidad),
+  };
 }
 
 function questionKey(value: unknown): string {
@@ -148,7 +163,7 @@ async function fetchNormalizedRows(client: NonNullable<typeof supabase>): Promis
     usuario_nombre: u.usuarios?.nombre ?? null,
     usuario_email: u.usuarios?.email ?? null,
     clues_imb: u.clues_imb ?? null,
-    nombre_de_la_unidad: u.nombre_de_la_unidad ?? null,
+    nombre_de_la_unidad: correctedUnitName(u.clues_imb, u.nombre_de_la_unidad),
     internet: u.internet ?? null,
     consultorios: u.consultorios ?? null,
     consultorio: null,
@@ -173,7 +188,7 @@ async function fetchNormalizedRows(client: NonNullable<typeof supabase>): Promis
       usuario_nombre: c.usuarios?.nombre ?? null,
       usuario_email: c.usuarios?.email ?? null,
       clues_imb: c.unidad_clues ?? null,
-      nombre_de_la_unidad: unidad?.nombre_de_la_unidad ?? null,
+      nombre_de_la_unidad: correctedUnitName(c.unidad_clues, unidad?.nombre_de_la_unidad),
       internet: unidad?.internet ?? null,
       consultorios: unidad?.consultorios ?? null,
       consultorio: c.numero ?? null,
@@ -499,7 +514,7 @@ async function fetchLiveAdvanceTables(): Promise<{
   );
   const baseAnRows = rows.filter(
     (row) => row.tipo_registro === 'consultorio' || !cluesWithConsultorios.has(normalize(row.clues_imb)),
-  );
+  ).map((row) => applyCorrectedUnitName(row as unknown as DataRow));
 
   const scriptLastRunAt = rows
     .map((row) => row.fecha_registro)
@@ -508,7 +523,7 @@ async function fetchLiveAdvanceTables(): Promise<{
     .at(-1);
 
   return {
-    baseAn: baseAnRows as unknown as DataRow[],
+    baseAn: baseAnRows,
     resultado,
     resumen,
     resumenEntidad,
@@ -547,6 +562,11 @@ export async function cargarTablasFormulario(): Promise<{ tablas: TablasFormular
     fetchLiveAdvanceTables(),
   ]);
 
+  const correctedCluesGeo = cluesGeo.map((row) => ({
+    ...row,
+    nombre_de_la_unidad: correctedUnitName(row.clues_imb, row.nombre_de_la_unidad),
+  }));
+
   const expectedUnits = units as ExpectedUnit[];
   const expectedEntities = new Set(expectedUnits.map((unit) => normalize(unit.entity)));
 
@@ -566,7 +586,7 @@ export async function cargarTablasFormulario(): Promise<{ tablas: TablasFormular
     tablaUnidadesAvance: liveTables.tablaUnidadesAvance,
     faltantesPorEstados: liveTables.faltantesPorEstados,
     tablaFaltantesPorEstados: liveTables.tablaFaltantesPorEstados,
-    cluesGeo,
+    cluesGeo: correctedCluesGeo,
     faltantes: liveTables.faltantes,
   };
 
