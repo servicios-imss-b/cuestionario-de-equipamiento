@@ -797,7 +797,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const enabledAnswer = answers[`${c}__${OFFICE_ENABLED_QUESTION}`];
     const requiredQuestions = [
       ...getRequiredOfficeConfigurationQuestions(generalData.turns[c] || '', enabledAnswer?.value),
-      ...(enabledAnswer?.value === 1 ? EQUIPMENT_CATALOG.map((item) => item.name) : [])
+      ...EQUIPMENT_CATALOG.map((item) => item.name)
     ];
     const cAnswered = requiredQuestions.reduce((count, question) => {
       if (question === TURN_SELECTION_QUESTION) {

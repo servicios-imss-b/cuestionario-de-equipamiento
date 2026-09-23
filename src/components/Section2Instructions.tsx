@@ -69,7 +69,7 @@ export const Section2Instructions: React.FC = () => {
                 Registrar Datos del Usuario
               </h3>
               <p className="text-xs text-black leading-relaxed">
-                Capture el nombre completo y un correo electrónico institucional con formato válido. Ambos campos son obligatorios.
+                Capture el nombre completo y un correo electrónico con formato válido. Ambos campos son obligatorios.
               </p>
             </div>
 
@@ -101,7 +101,7 @@ export const Section2Instructions: React.FC = () => {
               <p className="text-xs text-black leading-relaxed">
                 Responda las preguntas que no dependen de consultorios:
                 <br />• <strong>Internet:</strong> Seleccione SÍ, NO o PENDIENTE.
-                <br />• <strong>Consultorios para el informe SUS:</strong> Capture el número, presione Aplicar y después Confirmar. También puede presionar Enter dos veces.
+                <br />• <strong>Consultorios de Medicina General con que cuenta la Unidad Médica:</strong> Capture el número, presione Aplicar y después Confirmar. También puede presionar Enter dos veces.
               </p>
             </div>
 

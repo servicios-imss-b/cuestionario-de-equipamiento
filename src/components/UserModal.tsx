@@ -73,7 +73,7 @@ export const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onCancel 
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(clean)) {
-      setEmailError('Ingrese un formato de correo electrónico válido (ej: usuario@imssbienestar.gob.mx).');
+      setEmailError('Ingrese un formato de correo electrónico válido (ej: usuario@correo.com).');
       return false;
     }
     setEmailError('');
@@ -191,7 +191,7 @@ export const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onCancel 
             <div className="space-y-1.5">
               <label htmlFor="user-email" className="text-xs font-semibold text-rose-100 flex items-center gap-1.5 drop-shadow-sm">
                 <Mail className="w-3.5 h-3.5 text-[#A57F2C]" />
-                Correo electrónico institucional
+                Correo electrónico
               </label>
               <input
                 id="user-email"
@@ -202,7 +202,7 @@ export const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onCancel 
                   setTouched((p) => ({ ...p, email: true }));
                   validateEmail(email);
                 }}
-                placeholder="ejemplo@imssbienestar.gob.mx"
+                placeholder="ejemplo@correo.com"
                 className={`w-full px-4 py-2.5 rounded-xl bg-black/30 backdrop-blur-sm border ${
                   emailError && touched.email ? 'border-amber-400 bg-red-950/40' : 'border-white/20 focus:border-amber-300'
                 } text-white placeholder-white/40 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/40 transition-all`}

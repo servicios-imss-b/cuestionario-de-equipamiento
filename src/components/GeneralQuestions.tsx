@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
-import { Wifi, Sliders, ChevronDown, ChevronUp, ListFilter } from 'lucide-react';
+import { Wifi, Sliders, ChevronDown, ChevronUp, ListFilter, FileText } from 'lucide-react';
 import { EQUIPMENT_CATALOG } from '../data/equipmentCatalog.ts';
 import { OFFICE_ENABLED_QUESTION } from '../data/officeConfiguration.ts';
 
@@ -14,6 +14,7 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
     generalData,
     handleSetInternet,
     handleConfigureOffices,
+    setCompletedUnitName,
     stats,
     answers
   } = useApp();
@@ -68,9 +69,30 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
           <Sliders className="h-4 w-4 shrink-0 text-[#A57F2C]" />
           <span className="truncate text-xs font-bold uppercase">Características de la unidad médica</span>
         </span>
-        <span className="flex shrink-0 items-center gap-3 text-[11px] text-zinc-300">
+        <span className="flex shrink-0 items-center gap-2 text-[11px] text-zinc-300">
           <span>Consultorios: <strong className="text-amber-300">{generalData.configuredOffices}</strong></span>
           <span>Progreso: <strong className="text-emerald-300">{stats.progressPercentage}%</strong></span>
+          {stats.progressPercentage === 100 && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
+                event.stopPropagation();
+                setCompletedUnitName(selectedUnit.name);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setCompletedUnitName(selectedUnit.name);
+                }
+              }}
+              className="flex items-center gap-1 rounded-md bg-[#A57F2C] px-2 py-1 text-[10px] font-extrabold text-black"
+            >
+              <FileText className="h-3 w-3" />
+              DETALLES
+            </span>
+          )}
           <ChevronDown className="h-4 w-4 text-amber-300" />
         </span>
       </button>
@@ -223,9 +245,20 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
           </div>
         </div>
 
-        {/* Right: Missing Questions Dropdown */}
-        {missingQuestionsList.length > 0 && onScrollToQuestion && (
-          <div className="flex items-center gap-2 self-end md:self-center">
+        {/* Right: Missing Questions Dropdown and completed unit details */}
+        <div className="flex flex-wrap items-center gap-2 self-end md:self-center">
+          {stats.progressPercentage === 100 && (
+            <button
+              type="button"
+              onClick={() => setCompletedUnitName(selectedUnit.name)}
+              className="flex items-center gap-2 rounded-lg bg-[#A57F2C] px-3 py-1.5 text-xs font-extrabold text-black shadow-md transition-colors hover:bg-[#b88f33]"
+            >
+              <FileText className="h-4 w-4" />
+              DETALLES DE LA UNIDAD
+            </button>
+          )}
+          {missingQuestionsList.length > 0 && onScrollToQuestion && (
+          <div className="flex items-center gap-2">
             <ListFilter className="w-4 h-4 text-[#A57F2C]" />
             <select
               onChange={(e) => {
@@ -244,7 +277,8 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
               ))}
             </select>
           </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
