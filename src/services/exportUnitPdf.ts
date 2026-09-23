@@ -10,15 +10,6 @@ interface UnitPdfData {
   answered: number;
   totalQuestions: number;
   capturista: string;
-  officeSections: Array<{
-    number: number;
-    enabled: boolean;
-    turn: string;
-    doctors: string;
-    causes: string;
-    schedules: string;
-    equipment: Array<{ name: string; value: number | null | undefined }>;
-  }>;
 }
 
 export function exportUnitPdf(data: UnitPdfData): void {
@@ -56,28 +47,16 @@ export function exportUnitPdf(data: UnitPdfData): void {
   pdf.text('IMSS-BIENESTAR | Censo de equipamiento', margin, 21);
   y = 38;
 
-  addText(`${data.name} (${data.clues})`, 14, true, [0, 74, 66]);
-  addText(`Entidad: ${data.entity} | Internet: ${data.internet} | Consultorios: ${data.offices ?? 'Sin captura'}`);
-  addText(`Progreso: ${data.progress}% | Campos capturados: ${data.answered} de ${data.totalQuestions}`);
-  addText(`Capturista: ${data.capturista || 'Sin registro'}`);
-
-  for (const office of data.officeSections) {
-    ensureSpace(30);
-    pdf.setDrawColor(190, 190, 190);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 6;
-    addText(`CONSULTORIO ${office.number}`, 11, true, [165, 127, 44]);
-    addText(`Habilitado: ${office.enabled ? 'SI' : 'NO'} | Turno: ${office.turn || 'Sin turno'} | Medicos generales: ${office.doctors || 'Sin captura'}`);
-    if (!office.enabled) addText(`Causas: ${office.causes || 'Sin captura'}`);
-    if (office.enabled) addText(`Horarios: ${office.schedules || 'Sin horarios registrados'}`);
-
-    if (office.enabled && office.equipment.length > 0) {
-      addText('Equipamiento capturado:', 9, true);
-      for (const item of office.equipment) {
-        addText(`- ${item.name}: ${item.value ?? 'Sin captura'}`, 8);
-      }
-    }
-  }
+  addText('Detalles de la Unidad', 14, true, [0, 74, 66]);
+  addText('Captura al 100% lista para guardarse', 10, true, [0, 120, 90]);
+  addText(`CLUES: ${data.clues}`);
+  addText(`Entidad Federativa: ${data.entity}`);
+  addText(`Nombre de Unidad: ${data.name}`);
+  addText(`Servicio de Internet: ${data.internet}`);
+  addText(`Consultorios Configurados: ${data.offices ?? 'Sin captura'}`);
+  addText(`Progreso de Captura: ${data.progress}% completado`);
+  addText(`Campos Capturados: ${data.answered} de ${data.totalQuestions}`);
+  addText(`Capturista Registrado: ${data.capturista || 'Sin registro'}`);
 
   const pages = pdf.getNumberOfPages();
   for (let page = 1; page <= pages; page += 1) {

@@ -1,18 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Building2, CheckCircle2, FileDown, LoaderCircle, Save } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, FileDown, LoaderCircle, Save } from 'lucide-react';
 import { useApp } from '../context/AppContext.tsx';
 import { LoadingOverlay } from './LoadingOverlay.tsx';
-import { EQUIPMENT_CATALOG } from '../data/equipmentCatalog.ts';
-import {
-  DISABLED_OFFICE_CAUSES,
-  GENERAL_DOCTOR_COUNT_QUESTION,
-  getDoctorAvailabilityQuestion,
-  getOfficeScheduleQuestion,
-  getOperationalTurns,
-  OFFICE_ENABLED_QUESTION,
-  WEEK_DAYS
-} from '../data/officeConfiguration.ts';
 import { exportUnitPdf } from '../services/exportUnitPdf.ts';
 
 export const CompletedUnitModal: React.FC = () => {
@@ -20,7 +10,6 @@ export const CompletedUnitModal: React.FC = () => {
     completedUnitName,
     selectedUnit,
     generalData,
-    answers,
     stats,
     user,
     setCompletedUnitName,
@@ -34,7 +23,6 @@ export const CompletedUnitModal: React.FC = () => {
 
   if (!completedUnitName || !selectedUnit) return null;
 
-  const officeNumbers = Array.from({ length: generalData.configuredOffices ?? 0 }, (_, index) => index + 1);
   const displayValue = (value: number | null | undefined) => value ?? 'Sin captura';
 
   const handleConfirm = async () => {
@@ -53,35 +41,7 @@ export const CompletedUnitModal: React.FC = () => {
       progress: stats.progressPercentage,
       answered: stats.answeredCount,
       totalQuestions: stats.totalQuestions,
-      capturista: user ? `${user.name} (${user.email})` : '',
-      officeSections: officeNumbers.map((officeNumber) => {
-        const isEnabled = answers[`${officeNumber}__${OFFICE_ENABLED_QUESTION}`]?.value === 1;
-        const turn = generalData.turns[officeNumber] || '';
-        const causes = DISABLED_OFFICE_CAUSES
-          .filter((cause) => answers[`${officeNumber}__${cause.question}`]?.value === 1)
-          .map((cause) => cause.label)
-          .join(', ');
-        const schedules = getOperationalTurns(turn).flatMap((operationalTurn) =>
-          WEEK_DAYS.flatMap((day) => {
-            const hasSchedule = answers[`${officeNumber}__${getOfficeScheduleQuestion(operationalTurn, day.key)}`]?.value === 1;
-            if (!hasSchedule) return [];
-            const hasDoctor = answers[`${officeNumber}__${getDoctorAvailabilityQuestion(operationalTurn, day.key)}`]?.value === 1;
-            return [`${operationalTurn} - ${day.key}: ${hasDoctor ? 'con medico' : 'sin medico'}`];
-          })
-        ).join(' | ');
-        return {
-          number: officeNumber,
-          enabled: isEnabled,
-          turn,
-          doctors: String(answers[`${officeNumber}__${GENERAL_DOCTOR_COUNT_QUESTION}`]?.value ?? ''),
-          causes,
-          schedules,
-          equipment: EQUIPMENT_CATALOG.map((item) => ({
-            name: item.name,
-            value: answers[`${officeNumber}__${item.name}`]?.value
-          })).filter((item) => item.value !== null && item.value !== undefined)
-        };
-      })
+      capturista: user ? `${user.name} (${user.email})` : ''
     });
   };
 
@@ -127,56 +87,6 @@ export const CompletedUnitModal: React.FC = () => {
             <div className="col-span-2"><span className="block text-[9px] font-bold uppercase text-zinc-400">Capturista Registrado</span><strong>{user ? `${user.name} (${user.email})` : 'Sin registro'}</strong></div>
           </section>
 
-          <div className="space-y-4">
-            {officeNumbers.map((officeNumber) => {
-              const isEnabled = answers[`${officeNumber}__${OFFICE_ENABLED_QUESTION}`]?.value === 1;
-              const turn = generalData.turns[officeNumber] || '';
-              const causes = DISABLED_OFFICE_CAUSES
-                .filter((cause) => answers[`${officeNumber}__${cause.question}`]?.value === 1)
-                .map((cause) => cause.label);
-              const schedules = getOperationalTurns(turn).flatMap((operationalTurn) =>
-                WEEK_DAYS.flatMap((day) => {
-                  const hasSchedule = answers[`${officeNumber}__${getOfficeScheduleQuestion(operationalTurn, day.key)}`]?.value === 1;
-                  if (!hasSchedule) return [];
-                  const hasDoctor = answers[`${officeNumber}__${getDoctorAvailabilityQuestion(operationalTurn, day.key)}`]?.value === 1;
-                  return [`${operationalTurn} · ${day.key}: ${hasDoctor ? 'con médico' : 'sin médico'}`];
-                })
-              );
-              const equipment = EQUIPMENT_CATALOG.map((item) => ({
-                name: item.name,
-                value: answers[`${officeNumber}__${item.name}`]?.value
-              })).filter((item) => item.value !== null && item.value !== undefined);
-
-              return (
-                <section key={officeNumber} className="border-b border-white/10 pb-4 last:border-0">
-                  <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                    <h3 className="flex items-center gap-1.5 font-extrabold text-amber-300"><Building2 className="h-4 w-4" />Consultorio {officeNumber}</h3>
-                    <span>Habilitado: <strong className={isEnabled ? 'text-emerald-300' : 'text-rose-300'}>{isEnabled ? 'SÍ' : 'NO'}</strong></span>
-                    {isEnabled && <span>Turno: <strong>{turn || 'Sin turno'}</strong></span>}
-                    {isEnabled && <span>Médicos generales: <strong>{displayValue(answers[`${officeNumber}__${GENERAL_DOCTOR_COUNT_QUESTION}`]?.value)}</strong></span>}
-                    {!isEnabled && <span>Causas: <strong>{causes.join(', ') || 'Sin captura'}</strong></span>}
-                  </div>
-
-                  {isEnabled && (
-                    <>
-                      <div className="mb-2 text-[10px] text-zinc-300">
-                        <span className="font-bold uppercase text-zinc-400">Horarios: </span>
-                        {schedules.join(' | ') || 'Sin horarios registrados'}
-                      </div>
-                      <div className="grid grid-cols-1 gap-x-5 gap-y-1 text-[10px] sm:grid-cols-2 lg:grid-cols-3">
-                        {equipment.map((item) => (
-                          <div key={item.name} className="flex justify-between gap-2 border-b border-white/5 py-1">
-                            <span className="min-w-0 text-zinc-300">{item.name}</span>
-                            <strong className="shrink-0 text-amber-200">{item.value}</strong>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </section>
-              );
-            })}
-          </div>
         </div>
 
         <div className="flex flex-col gap-3 border-t border-white/15 bg-black/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
