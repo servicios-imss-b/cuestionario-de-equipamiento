@@ -180,7 +180,7 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
                   handleApplyOfficeCount();
                 }
               }}
-              aria-label="Número de consultorios para el informe SUS"
+              aria-label="Número de consultorios de Medicina General de la Unidad Médica"
               className="w-16 rounded-lg border border-white/20 bg-black/40 px-2 py-1.5 text-center text-sm font-bold text-white focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
             <button
