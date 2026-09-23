@@ -108,25 +108,18 @@ async function saveAnswerRow(payload: Parameters<typeof saveSingleAnswer>[0]) {
       numero: payload.numeroConsultorio,
       usuario_id: usuarioId,
       fecha_registro: timestamp,
-      turno: enabled === false ? null : existing.data?.turno || null,
-      turno_consultorio: enabled === false ? null : existing.data?.turno_consultorio || payload.turno || null,
+      turno: existing.data?.turno || null,
+      turno_consultorio: existing.data?.turno_consultorio || payload.turno || null,
       habilitado: enabled,
       causas_inhabilitacion: enabled === true ? '' : [...selectedCauses].join(', '),
-      medicos_generales: enabled === false
-        ? null
-        : payload.pregunta === GENERAL_DOCTOR_COUNT_QUESTION ? payload.valor : existing.data?.medicos_generales ?? null
+      medicos_generales: payload.pregunta === GENERAL_DOCTOR_COUNT_QUESTION
+        ? payload.valor
+        : existing.data?.medicos_generales ?? null
     };
     const result = existing.data
       ? await client.from('consultorios').update(row).eq('id', existing.data.id)
       : await client.from('consultorios').insert(row);
     if (result.error) throw result.error;
-    if (payload.pregunta === OFFICE_ENABLED_QUESTION && !enabled) {
-      const { error } = await client.rpc('eliminar_datos_consultorio_deshabilitado', {
-        p_clues: normalizedClues,
-        p_consultorio: payload.numeroConsultorio
-      });
-      if (error) throw error;
-    }
     return timestamp;
   }
 

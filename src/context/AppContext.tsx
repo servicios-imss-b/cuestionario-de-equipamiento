@@ -21,8 +21,7 @@ import {
   getAppDraft,
   makeAnswerKey,
   deleteLocalAnswersForUnit,
-  deleteLocalTurnSchedules,
-  deleteLocalEnabledOfficeData
+  deleteLocalTurnSchedules
 } from '../services/db.ts';
 import {
   checkServerHealth,
@@ -38,7 +37,6 @@ import {
   DISABLED_CAUSE_CONFIRMATION_QUESTION,
   getRequiredOfficeConfigurationQuestions,
   isDoctorAvailabilityQuestion,
-  isDisabledOfficeAnswerQuestion,
   isOfficeScheduleQuestion,
   OFFICE_ENABLED_QUESTION,
   TURN_SELECTION_QUESTION,
@@ -130,7 +128,7 @@ function isQuestionnaireComplete(
     const enabledAnswer = currentAnswers[`${officeNumber}__${OFFICE_ENABLED_QUESTION}`];
     const requiredQuestions = [
       ...getRequiredOfficeConfigurationQuestions(data.turns[officeNumber] || '', enabledAnswer?.value),
-      ...(enabledAnswer?.value === 1 ? EQUIPMENT_CATALOG.map((item) => item.name) : [])
+      ...EQUIPMENT_CATALOG.map((item) => item.name)
     ];
     return requiredQuestions.every((question) => {
       if (question === TURN_SELECTION_QUESTION) return Boolean(data.turns[officeNumber]);
@@ -679,39 +677,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       question,
       value,
       status: 'saving',
-      turn: isDisablingOffice ? '' : generalData.turns[officeNumber] || '',
+      turn: generalData.turns[officeNumber] || '',
       updatedAt: new Date().toISOString(),
       version: (previous?.version || 0) + 1
     };
-    const nextAnswers = Object.fromEntries(
-      (Object.entries({ ...answers, [cellKey]: newAnswer }) as Array<[string, QuestionAnswer]>).filter(([, answer]) =>
-        !isDisablingOffice
-        || answer.officeNumber !== officeNumber
-        || isDisabledOfficeAnswerQuestion(answer.question)
-      )
-    ) as Record<string, QuestionAnswer>;
+    const nextAnswers = { ...answers, [cellKey]: newAnswer };
     const nextGeneralData = isDisablingOffice
       ? {
           ...generalData,
-          turns: Object.fromEntries(Object.entries(generalData.turns).filter(([key]) => Number(key) !== officeNumber)),
           updatedAt: new Date().toISOString()
         }
       : generalData;
     const completesUnit = !wasComplete && isQuestionnaireComplete(nextGeneralData, nextAnswers);
 
-    setAnswers((currentAnswers) => Object.fromEntries(
-      (Object.entries({ ...currentAnswers, [cellKey]: newAnswer }) as Array<[string, QuestionAnswer]>).filter(([, answer]) =>
-        !isDisablingOffice
-        || answer.officeNumber !== officeNumber
-        || isDisabledOfficeAnswerQuestion(answer.question)
-      )
-    ) as Record<string, QuestionAnswer>);
+    setAnswers((currentAnswers) => ({ ...currentAnswers, [cellKey]: newAnswer }));
     if (isDisablingOffice) {
       setGeneralData(nextGeneralData);
-      await Promise.all([
-        deleteLocalEnabledOfficeData(selectedUnit.clues, officeNumber),
-        saveLocalGeneralData(nextGeneralData)
-      ]);
+      await saveLocalGeneralData(nextGeneralData);
     }
     await saveLocalAnswer(newAnswer);
     setEditingCellKey(null);
