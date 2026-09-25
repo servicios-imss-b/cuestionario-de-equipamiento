@@ -19,14 +19,15 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
   const officesCount = generalData.configuredOffices ?? 0;
   const officesList = Array.from({ length: officesCount }, (_, i) => i + 1);
   const activeOffice = Math.min(selectedOffice, Math.max(1, officesCount));
-  const answeredQuestions = EQUIPMENT_CATALOG.filter((item) => {
-    const answer = answers[`${activeOffice}__${item.name}`];
-    return answer?.value !== null && answer?.value !== undefined;
-  }).length;
-  const pendingQuestions = EQUIPMENT_CATALOG.length - answeredQuestions;
   const officeQuestions = EQUIPMENT_CATALOG.filter(
     (item) => !isUnitLevelEquipmentQuestion(item.name) || activeOffice === 1,
   );
+  const questionCount = officeQuestions.length;
+  const answeredQuestions = officeQuestions.filter((item) => {
+    const answer = answers[`${activeOffice}__${item.name}`];
+    return answer?.value !== null && answer?.value !== undefined;
+  }).length;
+  const pendingQuestions = questionCount - answeredQuestions;
   const questionsForView = viewMode === 'pending'
     ? officeQuestions.filter((item) => {
         const answer = answers[`${activeOffice}__${item.name}`];
@@ -97,10 +98,10 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
         <div className="mb-1 flex w-full flex-wrap items-end justify-between gap-2">
           <div>
             <p className="text-base font-extrabold text-amber-200 sm:text-lg">Seleccione el consultorio a llenar</p>
-            <p className="text-[11px] text-zinc-300">Cada consultorio contiene {EQUIPMENT_CATALOG.length} preguntas de equipamiento.</p>
+            <p className="text-[11px] text-zinc-300">Este formulario contiene {questionCount} preguntas de equipamiento.</p>
           </div>
           <p className="text-xs font-bold text-amber-300">
-            Consultorio {activeOffice}: {answeredQuestions} de {EQUIPMENT_CATALOG.length} respondidas
+            Consultorio {activeOffice}: {answeredQuestions} de {questionCount} respondidas
           </p>
         </div>
         {officesList.map((officeNumber) => (
@@ -127,7 +128,7 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
           <div className="flex flex-wrap gap-1 rounded-md border border-white/15 bg-black/20 p-1" aria-label="Opciones de visualización">
             {([
               ['pending', `Solo pendientes (${pendingQuestions})`],
-              ['all', 'Ver las 65']
+              ['all', `Ver las ${questionCount}`]
             ] as const).map(([mode, label]) => (
               <button
                 key={mode}
