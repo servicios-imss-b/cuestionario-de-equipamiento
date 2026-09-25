@@ -27,7 +27,7 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
   const questionsForView = viewMode === 'pending'
     ? EQUIPMENT_CATALOG.filter((item) => {
         const answer = answers[`${activeOffice}__${item.name}`];
-        return isUnitLevelEquipmentQuestion(item.name)
+        return (isUnitLevelEquipmentQuestion(item.name) && activeOffice === 1)
           || answer?.value === null
           || answer?.value === undefined;
       })

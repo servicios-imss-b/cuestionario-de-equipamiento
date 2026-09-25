@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Check, Save } from 'lucide-react';
 import zeroOfficesConfirmationImage from '../assets/zero-offices-confirmation.png';
+import unitLevelEquipmentImage from '../assets/unit-level-equipment.png';
 
 const DAYS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'];
 
@@ -128,6 +129,17 @@ export const FillingInstructionsCabinet: React.FC = () => {
                 <p className="border-t border-white/15 px-3 py-2 text-center text-[11px] font-semibold text-[#1E5B4F]">
                   Antes de borrar, confirme que está de acuerdo. Las 7 preguntas de equipamiento de unidad se conservan.
                 </p>
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-md border border-[#1E5B4F]/35 bg-[#002F2A] shadow-lg">
+                <img
+                  src={unitLevelEquipmentImage}
+                  alt="Las siete preguntas de equipamiento se llenan una sola vez por unidad y aparecen bloqueadas en los demás consultorios"
+                  className="h-auto w-full"
+                />
+                <div className="border-t border-white/15 px-3 py-3 text-center text-[11px] font-semibold leading-relaxed text-emerald-950">
+                  <strong>Estas 7 preguntas tienen llenado por unidad.</strong> Si la unidad tiene más consultorios, se conserva el valor capturado y no aparecen disponibles para una nueva captura individual.
+                </div>
               </div>
             </section>
 
