@@ -31,9 +31,10 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
   const questionsForView = viewMode === 'pending'
     ? officeQuestions.filter((item) => {
         const answer = answers[`${activeOffice}__${item.name}`];
-        return isUnitLevelEquipmentQuestion(item.name)
-          || answer?.value === null
-          || answer?.value === undefined;
+        if (isUnitLevelEquipmentQuestion(item.name)) {
+          return activeOffice === 1 && (answer?.value === null || answer?.value === undefined);
+        }
+        return answer?.value === null || answer?.value === undefined;
       })
     : officeQuestions;
   const visibleQuestions = questionsForView;
