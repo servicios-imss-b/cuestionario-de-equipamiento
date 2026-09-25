@@ -144,7 +144,7 @@ export const QuestionCell: React.FC<QuestionCellProps> = ({ officeNumber, questi
             ? 'border-amber-500/60 bg-amber-950/60 text-amber-200'
             : 'border-zinc-600/50 bg-zinc-900/70 text-zinc-400'
         }`}>
-          {hasStoredValue ? currentAnswer.value : 'NO HABILITADO'}
+          {hasStoredValue ? currentAnswer.value : 'PENDIENTE'}
         </div>
       ) : isEditing ? (
         <div className="min-w-[210px] bg-[#1E5B4F]/90 p-2 rounded-lg border border-amber-400 shadow-2xl z-20 relative">
