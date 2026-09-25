@@ -24,13 +24,17 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
     return answer?.value !== null && answer?.value !== undefined;
   }).length;
   const pendingQuestions = EQUIPMENT_CATALOG.length - answeredQuestions;
+  const officeQuestions = EQUIPMENT_CATALOG.filter(
+    (item) => !isUnitLevelEquipmentQuestion(item.name) || activeOffice === 1,
+  );
   const questionsForView = viewMode === 'pending'
-    ? EQUIPMENT_CATALOG.filter((item) => {
+    ? officeQuestions.filter((item) => {
         const answer = answers[`${activeOffice}__${item.name}`];
-        if (isUnitLevelEquipmentQuestion(item.name)) return activeOffice === 1;
-        return answer?.value === null || answer?.value === undefined;
+        return isUnitLevelEquipmentQuestion(item.name)
+          || answer?.value === null
+          || answer?.value === undefined;
       })
-    : EQUIPMENT_CATALOG;
+    : officeQuestions;
   const visibleQuestions = questionsForView;
 
   const selectOffice = (officeNumber: number) => {

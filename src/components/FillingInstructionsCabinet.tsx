@@ -138,7 +138,7 @@ export const FillingInstructionsCabinet: React.FC = () => {
                   className="h-auto w-full"
                 />
                 <div className="border-t border-white/15 px-3 py-3 text-center text-[11px] font-semibold leading-relaxed text-emerald-950">
-                  <strong>Estas 7 preguntas tienen llenado por unidad.</strong> Si la unidad tiene más consultorios, se conserva el valor capturado y no aparecen disponibles para una nueva captura individual.
+                  <strong>Estas 7 preguntas tienen llenado por unidad.</strong> Solo aparecen en el primer formulario. Si la unidad tiene más consultorios, no aparecen en los formularios adicionales y se conserva un único valor para toda la unidad.
                 </div>
               </div>
             </section>
