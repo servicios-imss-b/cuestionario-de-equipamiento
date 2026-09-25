@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import { EQUIPMENT_CATALOG } from '../data/equipmentCatalog.ts';
+import { isUnitLevelEquipmentQuestion } from '../data/equipmentCatalog.ts';
 import { QuestionCell } from './QuestionCell.tsx';
 import { OfficeConfigurationPanel } from './OfficeConfigurationPanel.tsx';
 import { CheckCircle2, ClipboardList } from 'lucide-react';
@@ -26,7 +27,9 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
   const questionsForView = viewMode === 'pending'
     ? EQUIPMENT_CATALOG.filter((item) => {
         const answer = answers[`${activeOffice}__${item.name}`];
-        return answer?.value === null || answer?.value === undefined;
+        return isUnitLevelEquipmentQuestion(item.name)
+          || answer?.value === null
+          || answer?.value === undefined;
       })
     : EQUIPMENT_CATALOG;
   const visibleQuestions = questionsForView;
@@ -41,13 +44,31 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
 
   if (officesCount === 0) {
     return (
-      <div className="w-full p-8 rounded-2xl backdrop-blur-xl bg-[#002F2A]/70 border border-white/10 text-center text-white space-y-2">
-        <p className="text-sm font-semibold text-amber-200">
-          La unidad ha sido configurada con 0 consultorios para capturar.
-        </p>
-        <p className="text-xs text-zinc-300">
-          Si desea registrar equipamiento, configure al menos 1 consultorio en la sección superior y presione &quot;Aplicar&quot;.
-        </p>
+      <div className="w-full overflow-hidden rounded-2xl border border-white/25 bg-[#002F2A]/70 text-white">
+        <div className="border-b border-white/15 bg-[#1E5B4F]/45 p-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-amber-300">Equipamiento de unidad</p>
+          <p className="mt-1 text-sm text-zinc-200">Estas preguntas se capturan aunque todavía no exista un formulario de consultorio.</p>
+        </div>
+        <table className="w-full table-fixed border-collapse text-left text-xs">
+          <thead className="bg-[#1E5B4F]/85">
+            <tr>
+              <th className="w-[65%] p-3 font-extrabold uppercase tracking-wider text-amber-300">Pregunta / Equipo</th>
+              <th className="w-[35%] p-2 text-center font-bold text-white">Unidad</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/10">
+            {EQUIPMENT_CATALOG.filter((item) => isUnitLevelEquipmentQuestion(item.name)).map((item) => (
+              <tr key={item.id} className="bg-[#1E5B4F]/25">
+                <td className="p-3 text-zinc-100">{item.name}</td>
+                <QuestionCell
+                  officeNumber={1}
+                  question={item.name}
+                  turn=""
+                />
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     );
   }
@@ -161,6 +182,7 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
               const idx = EQUIPMENT_CATALOG.findIndex((catalogItem) => catalogItem.id === item.id);
               const activeAnswer = answers[`${activeOffice}__${item.name}`];
               const isAnswered = activeAnswer?.value !== null && activeAnswer?.value !== undefined;
+              const isReadOnlyUnitQuestion = isUnitLevelEquipmentQuestion(item.name) && activeOffice !== 1;
 
               return (
                 <tr
@@ -196,6 +218,7 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
                     officeNumber={activeOffice}
                     question={item.name}
                     turn={generalData.turns[activeOffice] || ''}
+                    disabled={isReadOnlyUnitQuestion}
                   />
                 </tr>
               );

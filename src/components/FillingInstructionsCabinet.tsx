@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Check, Save } from 'lucide-react';
+import zeroOfficesConfirmationImage from '../assets/zero-offices-confirmation.png';
 
 const DAYS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'];
 
@@ -116,6 +117,17 @@ export const FillingInstructionsCabinet: React.FC = () => {
                 <div className="rounded-md border border-emerald-300/60 bg-emerald-950/55 p-3 text-sm leading-6 text-emerald-100">
                   <strong>Si captura más de 0:</strong> continúe con la configuración individual de cada consultorio.
                 </div>
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-md border border-[#9B2247]/40 bg-[#002F2A] shadow-lg">
+                <img
+                  src={zeroOfficesConfirmationImage}
+                  alt="Confirmación para borrar las respuestas de los consultorios al cambiar a cero consultorios"
+                  className="h-auto w-full"
+                />
+                <p className="border-t border-white/15 px-3 py-2 text-center text-[11px] font-semibold text-[#1E5B4F]">
+                  Antes de borrar, confirme que está de acuerdo. Las 7 preguntas de equipamiento de unidad se conservan.
+                </p>
               </div>
             </section>
 

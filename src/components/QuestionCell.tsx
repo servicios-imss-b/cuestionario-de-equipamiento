@@ -105,6 +105,7 @@ export const QuestionCell: React.FC<QuestionCellProps> = ({ officeNumber, questi
 
   // Determine visual color state
   const isPending = !currentAnswer || currentAnswer.value === null || currentAnswer.value === undefined;
+  const hasStoredValue = currentAnswer?.value !== null && currentAnswer?.value !== undefined;
   const isZero = currentAnswer && currentAnswer.value === 0;
   const isPositive = currentAnswer && currentAnswer.value !== null && currentAnswer.value > 0;
   const isCloudSaved = currentAnswer?.status === 'saved_cloud';
@@ -138,8 +139,12 @@ export const QuestionCell: React.FC<QuestionCellProps> = ({ officeNumber, questi
   return (
     <td className="p-1 sm:p-2 text-center align-middle relative group">
       {disabled ? (
-        <div className="flex min-h-10 w-full min-w-[90px] items-center justify-center rounded-lg border border-zinc-600/50 bg-zinc-900/70 px-2 py-2 text-[9px] font-bold text-zinc-400">
-          NO HABILITADO
+        <div className={`flex min-h-10 w-full min-w-[90px] items-center justify-center rounded-lg border px-2 py-2 text-xs font-bold ${
+          hasStoredValue
+            ? 'border-amber-500/60 bg-amber-950/60 text-amber-200'
+            : 'border-zinc-600/50 bg-zinc-900/70 text-zinc-400'
+        }`}>
+          {hasStoredValue ? currentAnswer.value : 'NO HABILITADO'}
         </div>
       ) : isEditing ? (
         <div className="min-w-[210px] bg-[#1E5B4F]/90 p-2 rounded-lg border border-amber-400 shadow-2xl z-20 relative">

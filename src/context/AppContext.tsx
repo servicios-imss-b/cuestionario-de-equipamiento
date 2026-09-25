@@ -32,7 +32,7 @@ import {
   deleteUnitAnswers,
   deleteOfficeTurnSchedules
 } from '../services/api.ts';
-import { EQUIPMENT_CATALOG } from '../data/equipmentCatalog.ts';
+import { EQUIPMENT_CATALOG, isUnitLevelEquipmentQuestion } from '../data/equipmentCatalog.ts';
 import {
   DISABLED_CAUSE_CONFIRMATION_QUESTION,
   getRequiredOfficeConfigurationQuestions,
@@ -122,7 +122,14 @@ function isQuestionnaireComplete(
   currentAnswers: Record<string, QuestionAnswer>
 ) {
   const officeCount = data.configuredOffices ?? 0;
-  if (officeCount <= 0) return false;
+  if (officeCount <= 0) {
+    return EQUIPMENT_CATALOG
+      .filter((item) => isUnitLevelEquipmentQuestion(item.name))
+      .every((item) => {
+        const answer = currentAnswers[`1__${item.name}`];
+        return answer?.value !== null && answer?.value !== undefined;
+      });
+  }
 
   return Array.from({ length: officeCount }, (_, index) => index + 1).every((officeNumber) => {
     const enabledAnswer = currentAnswers[`${officeNumber}__${OFFICE_ENABLED_QUESTION}`];
@@ -299,6 +306,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setIsUnitLocked(draft.isUnitLocked ?? true);
             try {
               const serverRes = await fetchUnitResponses(draft.selectedUnit.clues);
+              const localAnswers = await getLocalAnswersForUnit(draft.selectedUnit.clues);
+              const localUnitAnswers = Object.values(localAnswers).filter((answer) => isUnitLevelEquipmentQuestion(answer.question));
+              const restoredAnswers = { ...serverRes.answers };
+              localUnitAnswers.forEach((answer) => {
+                restoredAnswers[`${answer.officeNumber}__${answer.question}`] = answer;
+              });
               const serverGeneral = {
                 ...defaultGeneralData,
                 clues: draft.selectedUnit.clues,
@@ -308,11 +321,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 nombreUnidad: draft.selectedUnit.name || serverRes.general?.nombreUnidad || '',
                 usuarioEmail: draft.user?.email || serverRes.general?.usuarioEmail || ''
               };
-              setAnswers(serverRes.answers || {});
+              setAnswers(restoredAnswers);
               setGeneralData(serverGeneral);
               await Promise.all([
                 saveLocalGeneralData(serverGeneral),
-                replaceLocalAnswersForUnit(draft.selectedUnit.clues, serverRes.answers || {})
+                replaceLocalAnswersForUnit(draft.selectedUnit.clues, restoredAnswers)
               ]);
             } catch (serverError) {
               console.warn('Server unavailable while restoring draft:', serverError);
@@ -394,6 +407,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const serverRes = await fetchUnitResponses(unit.clues);
       loadedAnswers = serverRes.answers || {};
+      const localAnswers = await getLocalAnswersForUnit(unit.clues);
+      Object.values(localAnswers)
+        .filter((answer) => isUnitLevelEquipmentQuestion(answer.question))
+        .forEach((answer) => {
+          loadedAnswers[`${answer.officeNumber}__${answer.question}`] = answer;
+        });
       if (serverRes.general) {
         loadedGeneral = {
           ...baseGeneral,
@@ -520,8 +539,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setGeneralData(updated);
     void saveLocalGeneralData(updated);
-    if (safeCount === 0 && selectedUnit) finishCompletedUnit(selectedUnit.name);
-
     if (selectedUnit) {
       saveUnitGeneral(selectedUnit.clues, updated)
         .then(() => {
@@ -542,8 +559,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleConfirmZeroOffices = useCallback(async () => {
     if (!selectedUnit) return;
     try {
+      const localAnswers = await getLocalAnswersForUnit(selectedUnit.clues);
+      const unitAnswers = Object.values(localAnswers).filter((answer) => isUnitLevelEquipmentQuestion(answer.question));
       await deleteUnitAnswers(selectedUnit.clues);
       await deleteLocalAnswersForUnit(selectedUnit.clues);
+      await replaceLocalAnswersForUnit(
+        selectedUnit.clues,
+        Object.fromEntries(unitAnswers.map((answer) => [`${answer.officeNumber}__${answer.question}`, answer]))
+      );
       const updated: UnitGeneralData = {
         ...generalData,
         entidad: selectedEntity || selectedUnit.entity || generalData.entidad,
@@ -556,10 +579,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await saveUnitGeneral(selectedUnit.clues, updated);
       await saveLocalGeneralData(updated);
       setGeneralData(updated);
-      setAnswers({});
+      setAnswers(Object.fromEntries(unitAnswers.map((answer) => [`${answer.officeNumber}__${answer.question}`, answer])));
       setIsZeroOfficesModalOpen(false);
       await refreshPendingCount();
-      finishCompletedUnit(selectedUnit.name);
     } catch (error) {
       addToast('No se eliminaron las respuestas', 'error', 'La base de datos no confirmó la operación. Intenta nuevamente.');
     }
@@ -665,7 +687,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleSaveAnswer = useCallback(async (officeNumber: number, question: string, value: number, silentSuccess = false) => {
     if (!selectedUnit || !user || !selectedEntity) return;
 
-    const cellKey = `${officeNumber}__${question}`;
+    const isUnitLevelQuestion = isUnitLevelEquipmentQuestion(question);
+    const answerOfficeNumber = isUnitLevelQuestion ? 1 : officeNumber;
+    const cellKey = `${answerOfficeNumber}__${question}`;
     const previous = answers[cellKey];
     const wasComplete = isQuestionnaireComplete(generalData, answers);
     const isDisablingOffice = question === OFFICE_ENABLED_QUESTION && value === 0;
@@ -673,7 +697,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Optimistic local update
     const newAnswer: QuestionAnswer = {
       clues: selectedUnit.clues,
-      officeNumber,
+      officeNumber: answerOfficeNumber,
       question,
       value,
       status: 'saving',
@@ -682,6 +706,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       version: (previous?.version || 0) + 1
     };
     const nextAnswers = { ...answers, [cellKey]: newAnswer };
+    if (isUnitLevelQuestion) {
+      Array.from({ length: generalData.configuredOffices ?? 0 }, (_, index) => index + 1).forEach((unitOfficeNumber) => {
+        nextAnswers[`${unitOfficeNumber}__${question}`] = { ...newAnswer, officeNumber: unitOfficeNumber };
+      });
+    }
     const nextGeneralData = isDisablingOffice
       ? {
           ...generalData,
@@ -690,12 +719,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       : generalData;
     const completesUnit = !wasComplete && isQuestionnaireComplete(nextGeneralData, nextAnswers);
 
-    setAnswers((currentAnswers) => ({ ...currentAnswers, [cellKey]: newAnswer }));
+    setAnswers((currentAnswers) => {
+      const next = { ...currentAnswers, [cellKey]: newAnswer };
+      if (isUnitLevelQuestion) {
+        Array.from({ length: generalData.configuredOffices ?? 0 }, (_, index) => index + 1).forEach((unitOfficeNumber) => {
+          next[`${unitOfficeNumber}__${question}`] = { ...newAnswer, officeNumber: unitOfficeNumber };
+        });
+      }
+      return next;
+    });
     if (isDisablingOffice) {
       setGeneralData(nextGeneralData);
       await saveLocalGeneralData(nextGeneralData);
     }
-    await saveLocalAnswer(newAnswer);
+    await Promise.all(
+      (Object.values(nextAnswers) as QuestionAnswer[])
+        .filter((answer) => answer.question === question && (isUnitLevelQuestion || answer.officeNumber === officeNumber))
+        .map(saveLocalAnswer)
+    );
     setEditingCellKey(null);
 
     const payload = {
@@ -706,7 +747,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       nombreUnidad: selectedUnit.name,
       categoria: selectedUnit.category || 'Sin categoría',
       numeroConsultorios: generalData.configuredOffices ?? 0,
-      numeroConsultorio: officeNumber,
+      numeroConsultorio: answerOfficeNumber,
       pregunta: question,
       valor: value,
       turno: nextGeneralData.turns[officeNumber] || '',
@@ -721,8 +762,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           status: 'saved_cloud',
           syncedAt: res.serverTimestamp || new Date().toISOString()
         };
-        setAnswers((prev) => ({ ...prev, [cellKey]: cloudSaved }));
-        await saveLocalAnswer(cloudSaved);
+        setAnswers((prev) => {
+          const next = { ...prev, [cellKey]: cloudSaved };
+          if (isUnitLevelQuestion) {
+            Array.from({ length: generalData.configuredOffices ?? 0 }, (_, index) => index + 1).forEach((unitOfficeNumber) => {
+              next[`${unitOfficeNumber}__${question}`] = { ...cloudSaved, officeNumber: unitOfficeNumber };
+            });
+          }
+          return next;
+        });
+        await Promise.all(
+          (Object.values(nextAnswers) as QuestionAnswer[])
+            .filter((answer) => answer.question === question && (isUnitLevelQuestion || answer.officeNumber === officeNumber))
+            .map((answer) => saveLocalAnswer({ ...answer, ...cloudSaved, officeNumber: answer.officeNumber }))
+        );
         if (!silentSuccess) {
           addToast('Respuesta guardada correctamente.', 'success', `${question} (C${officeNumber}) = ${value}`);
         }
@@ -731,12 +784,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch (err: any) {
       console.warn('API save failed, queued locally:', err);
+      const errorMessage = err?.message || 'Error desconocido de Supabase';
+      const isMissingUnitRpc = errorMessage.includes('guardar_equipamiento_unidad') || errorMessage.includes('PGRST202');
       const localOnly: QuestionAnswer = {
         ...newAnswer,
         status: 'local_only'
       };
-      setAnswers((prev) => ({ ...prev, [cellKey]: localOnly }));
-      await saveLocalAnswer(localOnly);
+      setAnswers((prev) => {
+        const next = { ...prev, [cellKey]: localOnly };
+        if (isUnitLevelQuestion) {
+          Array.from({ length: generalData.configuredOffices ?? 0 }, (_, index) => index + 1).forEach((unitOfficeNumber) => {
+            next[`${unitOfficeNumber}__${question}`] = { ...localOnly, officeNumber: unitOfficeNumber };
+          });
+        }
+        return next;
+      });
+      await Promise.all(
+        (Object.values(nextAnswers) as QuestionAnswer[])
+          .filter((answer) => answer.question === question && (isUnitLevelQuestion || answer.officeNumber === officeNumber))
+          .map((answer) => saveLocalAnswer({ ...answer, ...localOnly, officeNumber: answer.officeNumber }))
+      );
       await addToSyncQueue({
         action: 'save_answer',
         clues: selectedUnit.clues,
@@ -746,7 +813,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast(
         'Respuesta almacenada localmente.',
         'warning',
-        'Estamos teniendo fallas de conexión con el servidor. Si nota que alguna pregunta no se llena, vuelva a intentar.'
+        isMissingUnitRpc
+          ? 'Falta aplicar la migración de Supabase para guardar estas preguntas en unidades.'
+          : `Supabase rechazó el guardado: ${errorMessage}`
       );
     }
 
@@ -797,7 +866,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const enabledAnswer = answers[`${c}__${OFFICE_ENABLED_QUESTION}`];
     const requiredQuestions = [
       ...getRequiredOfficeConfigurationQuestions(generalData.turns[c] || '', enabledAnswer?.value),
-      ...EQUIPMENT_CATALOG.map((item) => item.name)
+      ...EQUIPMENT_CATALOG
+        .filter((item) => c === 1 || !isUnitLevelEquipmentQuestion(item.name))
+        .map((item) => item.name)
     ];
     const cAnswered = requiredQuestions.reduce((count, question) => {
       if (question === TURN_SELECTION_QUESTION) {
@@ -835,14 +906,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }
 
-  const progressPercentage = generalData.configuredOffices === 0
-    ? 100
-    : totalQuestions > 0
+  if (generalData.configuredOffices === 0) {
+    const unitQuestions = EQUIPMENT_CATALOG.filter((item) => isUnitLevelEquipmentQuestion(item.name));
+    totalQuestions = unitQuestions.length;
+    answeredCount = unitQuestions.filter((item) => {
+      const answer = answers[`1__${item.name}`];
+      return answer?.value !== null && answer?.value !== undefined;
+    }).length;
+  }
+
+  const progressPercentage = totalQuestions > 0
       ? Number(((answeredCount / totalQuestions) * 100).toFixed(1))
       : 0;
   const pendingCount = totalQuestions - answeredCount;
-  const isFullySaved = generalData.configuredOffices === 0
-    || (totalQuestions > 0 && answeredCount === totalQuestions);
+  const isFullySaved = totalQuestions > 0 && answeredCount === totalQuestions;
 
   return (
     <AppContext.Provider

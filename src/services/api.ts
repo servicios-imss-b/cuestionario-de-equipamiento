@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { MexicanEntity, MedicalUnit, QuestionAnswer, EquipmentItem, SyncQueueItem, UnitGeneralData } from '../types.ts';
-import { EQUIPMENT_CATALOG, getEquipmentId } from '../data/equipmentCatalog.ts';
+import { EQUIPMENT_CATALOG, getEquipmentId, isUnitLevelEquipmentQuestion } from '../data/equipmentCatalog.ts';
 import {
   DISABLED_CAUSE_CONFIRMATION_QUESTION,
   DISABLED_OFFICE_CAUSES,
@@ -126,6 +126,17 @@ async function saveAnswerRow(payload: Parameters<typeof saveSingleAnswer>[0]) {
   const questionId = getEquipmentId(payload.pregunta.trim());
   if (!questionId) throw new Error(`La pregunta no existe en el catálogo: ${payload.pregunta}`);
   const timestamp = new Date().toISOString();
+  if (isUnitLevelEquipmentQuestion(payload.pregunta.trim())) {
+    const { error } = await client.rpc('guardar_equipamiento_unidad', {
+      p_clues: normalizedClues,
+      p_pregunta_id: questionId,
+      p_valor: payload.valor,
+      p_usuario_email: payload.usuarioEmail,
+      p_usuario_nombre: payload.usuarioNombre
+    });
+    if (error) throw error;
+    return timestamp;
+  }
   const { error } = await client.rpc('guardar_respuesta_consultorio', {
     p_clues: normalizedClues,
     p_consultorio: payload.numeroConsultorio,
@@ -334,6 +345,23 @@ export async function fetchUnitResponses(clues: string): Promise<{ answers: Reco
       equipmentResult = await supabase.from('respuestas_equipamiento').select('*').in('consultorio_id', officeIds);
       if (equipmentResult.error) throw equipmentResult.error;
     }
+    const unitEquipmentResult = await supabase
+      .from('unidades')
+      .select('p_33, p_38, p_39, p_40, p_44, p_64, p_65, fecha_registro')
+      .eq('clues_imb', normalizedClues)
+      .maybeSingle();
+    if (unitEquipmentResult.error) throw unitEquipmentResult.error;
+    const unitEquipment = new Map<number, { cantidad: number; fechaRegistro: string }>();
+    const unitRow = unitEquipmentResult.data;
+    [33, 38, 39, 40, 44, 64, 65].forEach((questionId) => {
+      const value = unitRow?.[`p_${questionId}` as keyof typeof unitRow];
+      if (value !== null && value !== undefined) {
+        unitEquipment.set(questionId, {
+          cantidad: Number(value),
+          fechaRegistro: unitRow?.fecha_registro || new Date().toISOString()
+        });
+      }
+    });
     const equipmentByOffice = new Map<number, Map<number, number>>();
     (equipmentResult.data || []).forEach((row) => {
       if (!equipmentByOffice.has(row.consultorio_id)) equipmentByOffice.set(row.consultorio_id, new Map());
@@ -418,7 +446,8 @@ export async function fetchUnitResponses(clues: string): Promise<{ answers: Reco
       });
       const officeEquipment = equipmentByOffice.get(office.id);
       EQUIPMENT_CATALOG.forEach((item) => {
-        const storedValue = officeEquipment?.get(Number(item.id));
+        const unitStored = isUnitLevelEquipmentQuestion(item.name) ? unitEquipment.get(Number(item.id)) : undefined;
+        const storedValue = unitStored?.cantidad ?? officeEquipment?.get(Number(item.id));
         if (storedValue === undefined) return;
         const question = normalizeQuestionName(item.name);
         answers[`${officeNumber}__${question}`] = {
@@ -428,11 +457,32 @@ export async function fetchUnitResponses(clues: string): Promise<{ answers: Reco
           value: Number(storedValue),
           status: 'saved_cloud',
           turn: '',
-          updatedAt,
+          updatedAt: unitStored?.fechaRegistro || updatedAt,
           version: Number(office.catalogo_version || 1)
         };
       });
     });
+
+    if (offices.length === 0) {
+      const updatedAt = unitRow?.fecha_registro || new Date().toISOString();
+      EQUIPMENT_CATALOG
+        .filter((item) => isUnitLevelEquipmentQuestion(item.name))
+        .forEach((item) => {
+          const storedValue = unitEquipment.get(Number(item.id));
+          if (!storedValue) return;
+          const question = normalizeQuestionName(item.name);
+          answers[`1__${question}`] = {
+            clues: normalizedClues,
+            officeNumber: 1,
+            question,
+            value: storedValue.cantidad,
+            status: 'saved_cloud',
+            turn: '',
+            updatedAt: storedValue.fechaRegistro || updatedAt,
+            version: 1
+          };
+        });
+    }
 
     const latestOffice = [...offices].sort(
       (a, b) => new Date(b.fecha_registro).getTime() - new Date(a.fecha_registro).getTime()

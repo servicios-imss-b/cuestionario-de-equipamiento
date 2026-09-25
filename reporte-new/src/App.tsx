@@ -5,7 +5,7 @@ import { AvanceCharts, AvanceSummaryCards, StatCards } from './components/Charts
 import { DataTable } from './components/DataTable';
 import { StorageUsage } from './components/StorageUsage';
 import { cargarTablasFormulario } from './data';
-import questions from '../../src/data/questions.json';
+import { reportQuestions, reportUnitQuestions } from './reportQuestions';
 import type { DashboardStats, DataRow, EntidadChart, InternetPieItem, TopFaltanteChart, CluesGeoItem } from './types';
 
 type DataTabKey = 'cruda' | 'clues' | 'estado' | 'faltantes' | 'tabla-avance' | 'tabla-entidades' | 'tabla-unidades' | 'faltantes-estados' | 'tabla-faltantes-estados';
@@ -29,12 +29,16 @@ function questionColumnKey(value: string): string {
     .replace(/^_+|_+$/g, '')}_consultorio`;
 }
 
-const QUESTION_COLUMN_LABELS = new Map(
-  (questions as Array<{ name: string }>).map((question) => [questionColumnKey(question.name), question.name]),
-);
+const QUESTION_COLUMN_LABELS = new Map<string, string>([
+  ...reportQuestions.map((question) => [questionColumnKey(question.name), question.name] as [string, string]),
+  ...reportUnitQuestions.map((question) => [
+    `${questionColumnKey(question.name).replace(/_consultorio$/, '')}_unidad`,
+    question.name,
+  ] as [string, string]),
+]);
 
 const EQUIPMENT_COLUMN_LABELS = new Map(
-  (questions as Array<{ id: number; name: string }>).map((question) => [`p_${question.id}`, question.name]),
+  reportQuestions.map((question) => [`p_${question.id}`, question.name]),
 );
 
 function toNumber(value: unknown): number {

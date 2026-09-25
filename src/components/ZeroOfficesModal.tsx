@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext.tsx';
 import { AlertTriangle, X } from 'lucide-react';
 
 export const ZeroOfficesModal: React.FC = () => {
   const { isZeroOfficesModalOpen, setIsZeroOfficesModalOpen, handleConfirmZeroOffices } = useApp();
+  const [isConfirmed, setIsConfirmed] = useState(false);
+
+  useEffect(() => {
+    if (!isZeroOfficesModalOpen) setIsConfirmed(false);
+  }, [isZeroOfficesModalOpen]);
 
   if (!isZeroOfficesModalOpen) return null;
 
@@ -25,11 +30,21 @@ export const ZeroOfficesModal: React.FC = () => {
             Confirmación de 0 Consultorios
           </h3>
 
-          <p className="text-xs sm:text-sm text-rose-100/90 mb-6 leading-relaxed">
-            Esta unidad ya tiene respuestas capturadas. Al cambiar a 0 consultorios se eliminarán permanentemente todas sus respuestas de la base de datos.
-            <br />
-            <strong className="text-amber-200 mt-2 block font-semibold">Esta acción no se puede deshacer. ¿Desea continuar?</strong>
-          </p>
+          <div className="mb-5 rounded-xl border border-rose-300/40 bg-black/20 p-3 text-left text-xs leading-relaxed text-rose-100/90 sm:text-sm">
+            <p>Al cambiar a 0 consultorios se borrarán las respuestas de los consultorios y sus horarios.</p>
+            <p className="mt-2 font-bold text-amber-200">Las 7 preguntas de equipamiento de unidad se conservarán.</p>
+            <p className="mt-2 font-extrabold uppercase text-rose-200">Esta acción no se puede deshacer.</p>
+          </div>
+
+          <label className="mb-5 flex cursor-pointer items-start gap-2 text-left text-xs font-semibold text-white">
+            <input
+              type="checkbox"
+              checked={isConfirmed}
+              onChange={(event) => setIsConfirmed(event.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-[#A57F2C]"
+            />
+            <span>Estoy de acuerdo y autorizo borrar los datos de los consultorios.</span>
+          </label>
 
           <div className="flex items-center gap-3">
             <button
@@ -42,7 +57,8 @@ export const ZeroOfficesModal: React.FC = () => {
             <button
               type="button"
               onClick={handleConfirmZeroOffices}
-              className="flex-1 py-2.5 rounded-xl bg-[#A57F2C] hover:bg-[#b88f33] text-black font-bold text-xs shadow-md transition-colors"
+              disabled={!isConfirmed}
+              className="flex-1 rounded-xl bg-[#A57F2C] py-2.5 text-xs font-bold text-black shadow-md transition-colors hover:bg-[#b88f33] disabled:cursor-not-allowed disabled:opacity-40"
               id="btn-confirmar-cero-consultorios"
             >
               ELIMINAR RESPUESTAS

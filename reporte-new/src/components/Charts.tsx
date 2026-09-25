@@ -16,7 +16,7 @@ import {
 } from 'recharts';
 import { Layers3, Building2, Globe, ClipboardList, X, MapPin, Download, type LucideIcon } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
-import questions from '../../../src/data/questions.json';
+import { reportQuestions, reportUnitQuestions } from '../reportQuestions';
 import type { DashboardStats, CluesGeoItem, DataRow, EntidadChart, InternetPieItem, TopFaltanteChart } from '../types';
 import { exportarExcel } from '../exportExcel';
 
@@ -81,13 +81,17 @@ function normalizeInsumoKey(value: string): string {
     .replace(/^_+|_+$/g, '');
 }
 
-const INSUMO_LABEL_BY_KEY = new Map(
-  (questions as Array<{ name: string }>).map((question) => [normalizeInsumoKey(question.name), question.name]),
-);
+const INSUMO_LABEL_BY_KEY = new Map<string, string>([
+  ...reportQuestions.map((question) => [normalizeInsumoKey(question.name), question.name] as [string, string]),
+  ...reportUnitQuestions.map((question) => [
+    `${normalizeInsumoKey(question.name)}_unidad`,
+    question.name,
+  ] as [string, string]),
+]);
 
 function formatInsumoName(key: string): string {
   const normalizedKey = key
-    .replace(/_consultorio(_\d+)?$/i, '')
+    .replace(/_(consultorio|unidad)(_\d+)?$/i, '')
     .trim();
   return INSUMO_LABEL_BY_KEY.get(normalizedKey) ?? normalizedKey.replace(/_/g, ' ');
 }

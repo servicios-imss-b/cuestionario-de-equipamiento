@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import units from '../../src/data/units.json';
-import questions from '../../src/data/questions.json';
 import type { CluesGeoItem, DataRow, TablasFormulario } from './types';
+import { reportOfficeQuestions, reportUnitQuestions } from './reportQuestions';
 
 interface ExpectedUnit {
   clues: string;
@@ -59,7 +59,7 @@ export async function fetchStorageUsage(): Promise<StorageUsageRow[]> {
     tamanoLegible: row.tamano_legible,
   }));
 }
-const EQUIPMENT_QUESTION_COUNT = questions.length;
+const EQUIPMENT_QUESTION_COUNT = reportOfficeQuestions.length;
 
 function normalize(value: unknown): string {
   return String(value ?? '').trim().toUpperCase();
@@ -175,6 +175,7 @@ async function fetchNormalizedRows(client: NonNullable<typeof supabase>): Promis
     causas_inhabilitacion: null,
     medicos_generales: null,
     catalogo_version: null,
+    ...Object.fromEntries(reportUnitQuestions.map((question) => [`p_${question.id}`, u[`p_${question.id}`] ?? null])),
     }));
 
   const consultorioRows: SupabaseRow[] = consultoriosData.map((c) => {
@@ -202,7 +203,7 @@ async function fetchNormalizedRows(client: NonNullable<typeof supabase>): Promis
       catalogo_version: c.catalogo_version ?? null,
     };
     const equipment = equipmentByOffice.get(c.id);
-    for (const question of questions) {
+    for (const question of reportOfficeQuestions) {
       row[`p_${question.id}`] = equipment?.get(Number(question.id)) ?? null;
     }
     return row;
@@ -267,11 +268,17 @@ async function fetchLiveAdvanceTables(): Promise<{
     if (!clues || !expectedByClues.has(clues)) continue;
     if (row.tipo_registro === 'unidad') {
       configByClues.set(clues, row);
+      for (const question of reportUnitQuestions) {
+        const value = row[`p_${question.id}`];
+        if (value !== null && value !== undefined) {
+          registerResponse({ ...row, pregunta: question.name, valor: Number(value) });
+        }
+      }
       continue;
     }
     if (row.tipo_registro === 'consultorio' && row.consultorio !== null) {
       officeByKey.set(`${clues}::${row.consultorio}`, row);
-      for (const question of questions) {
+      for (const question of reportOfficeQuestions) {
         const value = row[`p_${question.id}`];
         if (value === null || value === undefined) continue;
         registerResponse({ ...row, pregunta: question.name, valor: Number(value) });
@@ -282,13 +289,15 @@ async function fetchLiveAdvanceTables(): Promise<{
     registerResponse(row);
   }
 
-  const questionColumns = questions.map((question) => `${questionKey(question.name)}_consultorio`);
+  const officeQuestionColumns = reportOfficeQuestions.map((question) => `${questionKey(question.name)}_consultorio`);
+  const unitQuestionColumns = reportUnitQuestions.map((question) => `${questionKey(question.name)}_unidad`);
+  const questionColumns = [...officeQuestionColumns, ...unitQuestionColumns];
   const questionColumnByName = new Map(
-    questions.map((question) => [normalize(question.name), `${questionKey(question.name)}_consultorio`]),
+    reportOfficeQuestions.map((question) => [normalize(question.name), `${questionKey(question.name)}_consultorio`]),
   );
   const resultByOffice = new Map<string, DataRow>();
 
-  const ensureOfficeResult = (clues: string, office: number, row: SupabaseRow): DataRow | null => {
+  const ensureOfficeResult = (clues: string, office: number): DataRow | null => {
     const unit = expectedByClues.get(clues);
     if (!unit) return null;
     const key = `${clues}::${office}`;
@@ -308,6 +317,10 @@ async function fetchLiveAdvanceTables(): Promise<{
       habilitado: officeConfig?.habilitado ?? null,
       causas_inhabilitacion: officeConfig?.causas_inhabilitacion ?? null,
       medicos_generales: officeConfig?.medicos_generales ?? null,
+      ...Object.fromEntries(reportUnitQuestions.map((question) => [
+        `${questionKey(question.name)}_unidad`,
+        config?.[`p_${question.id}`] ?? null,
+      ])),
     };
     resultByOffice.set(key, result);
     return result;
@@ -316,18 +329,18 @@ async function fetchLiveAdvanceTables(): Promise<{
   for (const [clues, config] of configByClues) {
     const officeCount = Number(config.consultorios ?? 0);
     if (officeCount === 0) {
-      ensureOfficeResult(clues, 0, config);
+      ensureOfficeResult(clues, 0);
       continue;
     }
     for (let office = 1; office <= officeCount; office += 1) {
-      ensureOfficeResult(clues, office, config);
+      ensureOfficeResult(clues, office);
     }
   }
 
   for (const row of responseRows) {
     const clues = normalize(row.clues_imb);
     if (row.consultorio === null || row.consultorio <= 0) continue;
-    const result = ensureOfficeResult(clues, row.consultorio, row);
+    const result = ensureOfficeResult(clues, row.consultorio);
     if (!result) continue;
     const column = questionColumnByName.get(normalize(row.pregunta))
       ?? `${questionKey(row.pregunta)}_consultorio`;
@@ -376,6 +389,7 @@ async function fetchLiveAdvanceTables(): Promise<{
     ]);
     for (const [column, value] of Object.entries(row)) {
       if (column === 'entidad' || column === 'clues_imb' || column === 'nombre_de_la_unidad' || column === 'consultorio' || unitGeneralColumns.has(column)) continue;
+      if (unitQuestionColumns.includes(column) && row.consultorio !== 0 && row.consultorio !== 1) continue;
       if (typeof value === 'number') aggregate[column] = Number(aggregate[column] ?? 0) + value;
     }
     aggregate.medicos_generales = Number(aggregate.medicos_generales ?? 0) + Number(row.medicos_generales ?? 0);
@@ -387,6 +401,7 @@ async function fetchLiveAdvanceTables(): Promise<{
 
   const faltantes = resultado.flatMap((row) => {
     const missing = questionColumns
+      .filter((column) => !unitQuestionColumns.includes(column) || row.consultorio === 0 || row.consultorio === 1)
       .filter((column) => row[column] === null || row[column] === undefined)
       .map((column) => column.replace(/_consultorio$/, ''));
     if (!missing.length) return [];
@@ -417,10 +432,10 @@ async function fetchLiveAdvanceTables(): Promise<{
     const responded = response?.responded ?? 0;
     const configuredOffices = config?.consultorios == null ? null : Number(config.consultorios);
     const officeCount = configuredOffices ?? response?.maxOffice ?? null;
-    const expected = officeCount === null ? 0 : officeCount * EQUIPMENT_QUESTION_COUNT;
-    const percentage = officeCount === 0
-      ? 100
-      : (expected > 0 ? Math.min(100, +((responded / expected) * 100).toFixed(1)) : 0);
+    const expected = officeCount === null
+      ? reportUnitQuestions.length
+      : officeCount * EQUIPMENT_QUESTION_COUNT + reportUnitQuestions.length;
+    const percentage = expected > 0 ? Math.min(100, +((responded / expected) * 100).toFixed(1)) : 0;
 
     tablaUnidadesAvance.push({
       clues,
