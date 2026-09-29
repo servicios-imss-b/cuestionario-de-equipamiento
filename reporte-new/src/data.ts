@@ -150,6 +150,21 @@ async function fetchNormalizedRows(client: NonNullable<typeof supabase>): Promis
     equipmentByOffice.get(eq.consultorio_id)!.set(Number(eq.pregunta_id), Number(eq.cantidad));
   }
 
+  // Algunas respuestas generales historicas quedaron guardadas por consultorio.
+  // Para el reporte se reconstruyen en la fila de unidad sin alterar Supabase.
+  const unitEquipmentFallback = new Map<string, Map<number, number>>();
+  for (const office of [...consultoriosData].sort((first, second) => Number(first.numero) - Number(second.numero))) {
+    const clues = normalize(office.unidad_clues);
+    if (!unitEquipmentFallback.has(clues)) unitEquipmentFallback.set(clues, new Map());
+    const fallback = unitEquipmentFallback.get(clues)!;
+    const equipment = equipmentByOffice.get(office.id);
+    for (const question of reportUnitQuestions) {
+      const questionId = Number(question.id);
+      const value = equipment?.get(questionId);
+      if (value !== undefined && !fallback.has(questionId)) fallback.set(questionId, value);
+    }
+  }
+
   const unidadByClues = new Map<string, any>(
     unidadesData.map((unidad) => [normalize(unidad.clues_imb), unidad]),
   );
@@ -175,7 +190,11 @@ async function fetchNormalizedRows(client: NonNullable<typeof supabase>): Promis
     causas_inhabilitacion: null,
     medicos_generales: null,
     catalogo_version: null,
-    ...Object.fromEntries(reportUnitQuestions.map((question) => [`p_${question.id}`, u[`p_${question.id}`] ?? null])),
+    ...Object.fromEntries(reportUnitQuestions.map((question) => {
+      const questionId = Number(question.id);
+      const storedValue = u[`p_${question.id}`] ?? unitEquipmentFallback.get(normalize(u.clues_imb))?.get(questionId);
+      return [`p_${question.id}`, storedValue ?? null];
+    })),
     }));
 
   const consultorioRows: SupabaseRow[] = consultoriosData.map((c) => {
