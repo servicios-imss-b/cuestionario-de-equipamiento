@@ -8,7 +8,7 @@ import { cargarTablasFormulario } from './data';
 import { reportQuestions, reportUnitQuestions } from './reportQuestions';
 import type { DashboardStats, DataRow, EntidadChart, InternetPieItem, TopFaltanteChart, CluesGeoItem } from './types';
 
-type DataTabKey = 'cruda' | 'clues' | 'estado' | 'faltantes' | 'tabla-avance' | 'tabla-entidades' | 'tabla-unidades' | 'faltantes-estados' | 'tabla-faltantes-estados';
+type DataTabKey = 'cruda' | 'clues' | 'estado' | 'faltantes' | 'tabla-avance' | 'tabla-entidades' | 'tabla-unidades' | 'llenado-completo-entidad' | 'faltantes-estados' | 'tabla-faltantes-estados';
 type MainTabKey = 'infraestructura' | 'avance' | 'pendientes' | 'almacenamiento';
 
 function toText(value: unknown): string {
@@ -152,6 +152,7 @@ export default function App() {
   const [dataTab, setDataTab] = useState<DataTabKey>('clues');
   const [crudaUnlocked, setCrudaUnlocked] = useState(false);
   const [almacenamientoUnlocked, setAlmacenamientoUnlocked] = useState(false);
+  const [downloadsUnlocked, setDownloadsUnlocked] = useState(false);
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -182,7 +183,7 @@ export default function App() {
         setLoading(true);
       }
       setError(null);
-      const { tablas, fetchedAt } = await cargarTablasFormulario();
+      const { tablas, fetchedAt } = await cargarTablasFormulario(isRefresh);
       setBaseClues(tablas.baseClues);
       setBaseMeta(tablas.baseMeta);
       setBaseAn(tablas.baseAn);
@@ -373,8 +374,9 @@ export default function App() {
     setLogoClickCount((prev) => {
       const next = prev + 1;
       if (next >= 6) setCrudaUnlocked(true);
-      if (next >= 10) {
-        setAlmacenamientoUnlocked(true);
+      if (next >= 10) setAlmacenamientoUnlocked(true);
+      if (next >= 20) {
+        setDownloadsUnlocked(true);
         return 0;
       }
       return next;
@@ -387,6 +389,28 @@ export default function App() {
       .filter(Boolean),
   ).size;
 
+  const llenadoCompletoEntidad = useMemo<DataRow[]>(() => {
+    const completionByEntity = new Map<string, { entidad: string; total: number; completas: number }>();
+    for (const row of tablaUnidadesAvance) {
+      const entidad = toText(row.entidad) || 'Sin entidad';
+      const key = normalizeKey(entidad);
+      const current = completionByEntity.get(key) ?? { entidad, total: 0, completas: 0 };
+      current.total += 1;
+      if (toNumber(row.porcentaje) >= 100) current.completas += 1;
+      completionByEntity.set(key, current);
+    }
+
+    return [...completionByEntity.values()]
+      .map((row) => ({
+        entidad: row.entidad,
+        unidades_totales: row.total,
+        unidades_completas: row.completas,
+        unidades_pendientes: row.total - row.completas,
+        porcentaje_completas: row.total > 0 ? +((row.completas / row.total) * 100).toFixed(1) : 0,
+      }))
+      .sort((first, second) => toNumber(second.porcentaje_completas) - toNumber(first.porcentaje_completas));
+  }, [tablaUnidadesAvance]);
+
   const allDataTabs: { key: DataTabKey; label: string; icon: typeof Database; count: number }[] = [
     { key: 'cruda', label: 'Base Cruda', icon: Database, count: baseAn.length },
     { key: 'clues', label: 'Por CLUES', icon: Building2, count: uniqueCluesCount },
@@ -395,6 +419,7 @@ export default function App() {
     { key: 'tabla-avance', label: 'Tabla avance', icon: Gauge, count: tablaAvance.length },
     { key: 'tabla-entidades', label: 'Tabla entidades', icon: Layers3, count: tablaEntidades.length },
     { key: 'tabla-unidades', label: 'Tabla unidades', icon: Building2, count: tablaUnidadesAvance.length },
+    { key: 'llenado-completo-entidad', label: 'Llenado completo por entidad', icon: Gauge, count: llenadoCompletoEntidad.length },
     { key: 'faltantes-estados', label: 'Faltantes por CLUES', icon: AlertTriangle, count: faltantesPorEstados.length },
     { key: 'tabla-faltantes-estados', label: 'Tabla faltantes por CLUES', icon: AlertTriangle, count: tablaFaltantesPorEstados.length },
   ];
@@ -411,72 +436,6 @@ export default function App() {
     }));
   }, [porEntidad]);
 
-  const avancePorEntidad = useMemo(() => {
-    if (tablaAvance.length > 0) {
-      return tablaAvance
-        .map((row) => ({
-          entidad: toText(row.entidad),
-          totalUnidades: toNumber(row.total_unidades),
-          unidadesRespondieron: toNumber(row.unidades_respondieron),
-          porcentaje: toNumber(row.porcentaje),
-        }))
-        .filter((row) => row.entidad)
-        .sort((a, b) => b.porcentaje - a.porcentaje);
-    }
-
-    const esperadasByEntidad = new Map<string, { entidad: string; clues: Set<string> }>();
-    const respondidasByEntidad = new Map<string, { entidad: string; clues: Set<string> }>();
-
-    for (const row of baseAn) {
-      const tipoRegistro = toText(row.tipo_registro).toLowerCase();
-      if (tipoRegistro && tipoRegistro !== 'unidad') continue;
-
-      const entidad = toText(row.entidad);
-      const clues = toText(row.clues_imb || row.clues);
-      if (!entidad || !clues) continue;
-
-      const key = normalizeKey(entidad);
-      if (!esperadasByEntidad.has(key)) {
-        esperadasByEntidad.set(key, { entidad, clues: new Set<string>() });
-      }
-      esperadasByEntidad.get(key)?.clues.add(clues);
-    }
-
-    for (const row of resumen) {
-      const entidad = toText(row.entidad);
-      const clues = toText(row.clues_imb || row.clues);
-      if (!entidad || !clues) continue;
-
-      const key = normalizeKey(entidad);
-      if (!respondidasByEntidad.has(key)) {
-        respondidasByEntidad.set(key, { entidad, clues: new Set<string>() });
-      }
-      respondidasByEntidad.get(key)?.clues.add(clues);
-    }
-
-    const allKeys = new Set<string>([
-      ...Array.from(esperadasByEntidad.keys()),
-      ...Array.from(respondidasByEntidad.keys()),
-    ]);
-
-    return Array.from(allKeys).map((key) => {
-      const expected = esperadasByEntidad.get(key);
-      const captured = respondidasByEntidad.get(key);
-      const totalUnidades = expected?.clues.size ?? 0;
-      const unidadesRespondieronRaw = captured?.clues.size ?? 0;
-      const unidadesRespondieron = Math.min(unidadesRespondieronRaw, totalUnidades || unidadesRespondieronRaw);
-
-      return {
-        entidad: captured?.entidad ?? expected?.entidad ?? key,
-        totalUnidades,
-        unidadesRespondieron,
-        porcentaje: totalUnidades > 0
-          ? +((unidadesRespondieron / totalUnidades) * 100).toFixed(1)
-          : 0,
-      };
-    }).sort((a, b) => b.porcentaje - a.porcentaje);
-  }, [baseAn, resumen, tablaAvance]);
-
   const avanceSummary = useMemo(() => {
     const totalEstados = tablaAvance.length;
     const estadosConRegistro = tablaAvance.reduce((sum, row) => sum + (toNumber(row.unidades_respondieron) > 0 ? 1 : 0), 0);
@@ -488,8 +447,8 @@ export default function App() {
       0,
     );
 
-    const entidadesAl100 = tablaAvance.reduce(
-      (sum, row) => sum + (toNumber(row.porcentaje) >= 100 ? 1 : 0),
+    const entidadesAl100 = llenadoCompletoEntidad.reduce(
+      (sum, row) => sum + (toNumber(row.porcentaje_completas) >= 100 ? 1 : 0),
       0,
     );
 
@@ -506,7 +465,7 @@ export default function App() {
       unidadesCompletas,
       pctUnidadesCompletas,
     };
-  }, [tablaAvance, tablaUnidadesAvance]);
+  }, [tablaAvance, tablaUnidadesAvance, llenadoCompletoEntidad]);
 
   const pendingSummary = useMemo(() => {
     const cluesSet = new Set<string>();
@@ -604,7 +563,7 @@ export default function App() {
               </div>
 
               {mainTab === 'infraestructura' && (
-                <StatCards stats={stats} internetPie={internetPie} porEntidad={porEntidad} topFaltantes={topFaltantes} cluesGeo={cluesGeo} resultado={resultado} />
+                <StatCards stats={stats} internetPie={internetPie} porEntidad={porEntidad} topFaltantes={topFaltantes} cluesGeo={cluesGeo} resultado={resultado} showExports={downloadsUnlocked} />
               )}
 
               {mainTab === 'avance' && (
@@ -614,7 +573,12 @@ export default function App() {
                   <AvanceCharts
                     porEntidad={porEntidad}
                     globalPct={liveGlobalPct}
-                    avancePorEntidad={avancePorEntidad}
+                    llenadoCompletoPorEntidad={llenadoCompletoEntidad.map((row) => ({
+                      entidad: toText(row.entidad),
+                      totalUnidades: toNumber(row.unidades_totales),
+                      unidadesCompletas: toNumber(row.unidades_completas),
+                      porcentaje: toNumber(row.porcentaje_completas),
+                    }))}
                     tablaEntidades={tablaEntidades}
                   />
                 </div>
@@ -648,6 +612,8 @@ export default function App() {
                       <DataTable<DataRow>
                         exportFileName="base_cruda"
                         exportSheetName="Base Cruda"
+                        showExports={downloadsUnlocked}
+                        description="Registros normalizados de unidades y consultorios tal como se consultan en Supabase."
                         data={baseAn}
                         columns={tableColumns(baseAn, false, ['pregunta', 'valor'])}
                         exportColumns={tableColumns(baseAn, true, ['pregunta', 'valor'])}
@@ -658,6 +624,8 @@ export default function App() {
                       <DataTable<DataRow>
                         exportFileName="por_clues"
                         exportSheetName="Por CLUES"
+                        showExports={downloadsUnlocked}
+                        description="Detalle de respuestas por CLUES y consultorio, con equipamiento y datos generales de la unidad."
                         data={resultado}
                         columns={tableColumns(resultado, false)}
                         exportColumns={tableColumns(resultado, true)}
@@ -668,6 +636,8 @@ export default function App() {
                       <DataTable<DataRow>
                         exportFileName="por_estado"
                         exportSheetName="Por Estado"
+                        showExports={downloadsUnlocked}
+                        description="Totales de equipamiento agregados por entidad federativa."
                         data={resumenEntidad}
                         columns={tableColumns(resumenEntidad, false)}
                         exportColumns={tableColumns(resumenEntidad, true)}
@@ -678,6 +648,8 @@ export default function App() {
                       <DataTable<DataRow>
                         exportFileName="faltantes"
                         exportSheetName="Faltantes"
+                        showExports={downloadsUnlocked}
+                        description="Campos pendientes por CLUES y consultorio: preguntas base, Internet, configuración operativa y equipamiento."
                         data={faltantes}
                         columns={tableColumns(faltantes, false)}
                         exportColumns={tableColumns(faltantes, true)}
@@ -685,23 +657,35 @@ export default function App() {
                     )}
 
                     {dataTab === 'tabla-avance' && (
-                      <DataTable<DataRow> exportFileName="tabla_avance" exportSheetName="Tabla avance" data={tablaAvance} columns={tableColumns(tablaAvance, false)} exportColumns={tableColumns(tablaAvance, true)} />
+                      <DataTable<DataRow> showExports={downloadsUnlocked} description="Cobertura por entidad: unidades con al menos un registro respecto al total esperado." exportFileName="tabla_avance" exportSheetName="Tabla avance" data={tablaAvance} columns={tableColumns(tablaAvance, false)} exportColumns={tableColumns(tablaAvance, true)} />
                     )}
 
                     {dataTab === 'tabla-entidades' && (
-                      <DataTable<DataRow> exportFileName="tabla_entidades" exportSheetName="Tabla entidades" data={tablaEntidades} columns={tableColumns(tablaEntidades, false)} exportColumns={tableColumns(tablaEntidades, true)} />
+                      <DataTable<DataRow> showExports={downloadsUnlocked} description="Avance agregado por entidad según respuestas esperadas y capturadas de todas sus unidades." exportFileName="tabla_entidades" exportSheetName="Tabla entidades" data={tablaEntidades} columns={tableColumns(tablaEntidades, false)} exportColumns={tableColumns(tablaEntidades, true)} />
                     )}
 
                     {dataTab === 'tabla-unidades' && (
-                      <DataTable<DataRow> exportFileName="tabla_unidades" exportSheetName="Tabla unidades" data={tablaUnidadesAvance} columns={tableColumns(tablaUnidadesAvance, false)} exportColumns={tableColumns(tablaUnidadesAvance, true)} />
+                      <DataTable<DataRow> showExports={downloadsUnlocked} description="Avance por CLUES: 7 preguntas base + Internet + equipamiento y configuración por consultorio. Con 0 consultorios, el 100% requiere completar las 7 preguntas base e Internet (8/8)." exportFileName="tabla_unidades" exportSheetName="Tabla unidades" data={tablaUnidadesAvance} columns={tableColumns(tablaUnidadesAvance, false)} exportColumns={tableColumns(tablaUnidadesAvance, true)} />
+                    )}
+
+                    {dataTab === 'llenado-completo-entidad' && (
+                      <DataTable<DataRow>
+                        description="Mide el llenado completo por entidad. Una unidad cuenta como completa sólo cuando alcanza 100% en preguntas base, Internet, equipamiento y configuración operativa; la entidad llega a 100% cuando todas sus CLUES están completas."
+                        exportFileName="llenado_completo_por_entidad"
+                        exportSheetName="Llenado completo"
+                        showExports={downloadsUnlocked}
+                        data={llenadoCompletoEntidad}
+                        columns={tableColumns(llenadoCompletoEntidad, false)}
+                        exportColumns={tableColumns(llenadoCompletoEntidad, true)}
+                      />
                     )}
 
                     {dataTab === 'faltantes-estados' && (
-                      <DataTable<DataRow> exportFileName="faltantes_por_clues" exportSheetName="Faltantes por CLUES" data={faltantesPorEstados} columns={tableColumns(faltantesPorEstados, false)} exportColumns={tableColumns(faltantesPorEstados, true)} />
+                      <DataTable<DataRow> showExports={downloadsUnlocked} description="Unidades esperadas que todavía no cuentan con respuestas registradas." exportFileName="faltantes_por_clues" exportSheetName="Faltantes por CLUES" data={faltantesPorEstados} columns={tableColumns(faltantesPorEstados, false)} exportColumns={tableColumns(faltantesPorEstados, true)} />
                     )}
 
                     {dataTab === 'tabla-faltantes-estados' && (
-                      <DataTable<DataRow> exportFileName="tabla_faltantes_por_clues" exportSheetName="Tabla faltantes por CLUES" data={tablaFaltantesPorEstados} columns={tableColumns(tablaFaltantesPorEstados, false)} exportColumns={tableColumns(tablaFaltantesPorEstados, true)} />
+                      <DataTable<DataRow> showExports={downloadsUnlocked} description="Cantidad de CLUES sin respuestas agrupada por entidad federativa." exportFileName="tabla_faltantes_por_clues" exportSheetName="Tabla faltantes por CLUES" data={tablaFaltantesPorEstados} columns={tableColumns(tablaFaltantesPorEstados, false)} exportColumns={tableColumns(tablaFaltantesPorEstados, true)} />
                     )}
                   </div>
               )}

@@ -16,6 +16,8 @@ interface DataTableProps<T extends object> {
   exportColumns?: Column<T>[];
   exportFileName: string;
   exportSheetName: string;
+  description?: string;
+  showExports?: boolean;
 }
 
 const PAGE_SIZE = 15;
@@ -26,17 +28,33 @@ export function DataTable<T extends object>({
   exportColumns,
   exportFileName,
   exportSheetName,
+  description,
+  showExports = false,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<keyof T | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(0);
+  const [percentageRange, setPercentageRange] = useState('all');
+  const percentageColumn = columns.find((column) => /porcentaje|percent|pct/i.test(String(column.key)));
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return data;
     const q = search.toLowerCase();
-    return data.filter((row) => columns.some((col) => String(row[col.key] ?? '').toLowerCase().includes(q)));
-  }, [data, search, columns]);
+    return data.filter((row) => {
+      const matchesSearch = !search.trim()
+        || columns.some((col) => String(row[col.key] ?? '').toLowerCase().includes(q));
+      if (!matchesSearch || !percentageColumn || percentageRange === 'all') return matchesSearch;
+
+      const percentage = Number(row[percentageColumn.key]);
+      if (!Number.isFinite(percentage)) return false;
+      if (percentageRange === 'under-10') return percentage < 10;
+      if (percentageRange === '100') return percentage >= 100;
+      if (percentageRange.startsWith('from-')) {
+        return percentage >= Number(percentageRange.replace('from-', ''));
+      }
+      return true;
+    });
+  }, [data, search, columns, percentageColumn, percentageRange]);
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
@@ -68,32 +86,29 @@ export function DataTable<T extends object>({
 
   const handleExport = () => {
     const columnsToExport = exportColumns ?? columns;
-    const out = sorted.map((row) => {
-      const o: Record<string, unknown> = {};
-      columnsToExport.forEach((col) => {
-        o[col.label] = row[col.key];
-      });
-      return o;
-    });
+    const out = sorted.map((row) => Object.fromEntries(
+      columnsToExport.map((column) => [column.label, row[column.key]]),
+    ));
     exportarExcel(out, exportFileName, exportSheetName);
   };
 
   const handleParquetExport = () => {
     const columnsToExport = exportColumns ?? columns;
-    const out = sorted.map((row) => {
-      const record: Record<string, unknown> = {};
-      columnsToExport.forEach((col) => {
-        record[col.label] = row[col.key];
-      });
-      return record;
-    });
+    const out = sorted.map((row) => Object.fromEntries(
+      columnsToExport.map((column) => [column.label, row[column.key]]),
+    ));
     exportarParquet(out, exportFileName);
   };
 
   return (
     <div className="card animate-fade-in overflow-hidden">
-      <div className="border-b border-gray-100 bg-white px-4 py-3">
-        <label className="relative block max-w-sm">
+      {description && (
+        <div className="border-b border-gray-100 bg-emerald-50/60 px-4 py-3 text-sm text-gray-600">
+          {description}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-3">
+        <label className="relative block w-full max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
@@ -105,6 +120,24 @@ export function DataTable<T extends object>({
             className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-imss-green/40 focus:bg-white"
           />
         </label>
+        {percentageColumn && (
+          <select
+            value={percentageRange}
+            onChange={(event) => {
+              setPercentageRange(event.target.value);
+              setPage(0);
+            }}
+            className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700 outline-none transition focus:border-imss-green/40 focus:bg-white"
+            aria-label="Filtrar tabla por porcentaje"
+          >
+            <option value="all">Todos los porcentajes</option>
+            <option value="under-10">Menor a 10%</option>
+            {[10, 20, 30, 40, 50, 60, 70, 80, 90].map((lowerBound) => (
+              <option key={lowerBound} value={`from-${lowerBound}`}>{lowerBound}% a 100%</option>
+            ))}
+            <option value="100">Sólo 100%</option>
+          </select>
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -179,22 +212,24 @@ export function DataTable<T extends object>({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 rounded-lg bg-imss-green px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-imss-green-mid"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Exportar Excel
-          </button>
-          <button
-            onClick={handleParquetExport}
-            className="flex items-center gap-2 rounded-lg border border-imss-green px-4 py-2 text-xs font-semibold text-imss-green shadow-sm transition-colors hover:bg-imss-green/10"
-          >
-            <FileArchive className="h-3.5 w-3.5" />
-            Exportar Parquet
-          </button>
-        </div>
+        {showExports && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-2 rounded-lg bg-imss-green px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-imss-green-mid"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Exportar Excel
+            </button>
+            <button
+              onClick={handleParquetExport}
+              className="flex items-center gap-2 rounded-lg border border-imss-green px-4 py-2 text-xs font-semibold text-imss-green shadow-sm transition-colors hover:bg-imss-green/10"
+            >
+              <FileArchive className="h-3.5 w-3.5" />
+              Exportar Parquet
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

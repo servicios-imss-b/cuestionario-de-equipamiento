@@ -27,6 +27,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ isOpen, onCl
   const [loginError, setLoginError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isOpeningReport, setIsOpeningReport] = useState(false);
+  const [isPrivacyNoticeOpen, setIsPrivacyNoticeOpen] = useState(false);
 
   if (!isOpen) return null;
 
@@ -56,6 +57,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ isOpen, onCl
     setUsername('');
     setPassword('');
     setLoginError('');
+    setIsPrivacyNoticeOpen(false);
     onClose();
     if (token) {
       try {
@@ -153,6 +155,27 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ isOpen, onCl
               <span>{isLoading ? 'VALIDANDO...' : 'INGRESAR'}</span>
               {!isLoading && <CheckCircle className="h-4 w-4" />}
             </button>
+            <div className="mt-5 border-t border-white/15 pt-4 text-[11px] leading-relaxed text-rose-100/85">
+              <p>
+                Tus datos de acceso se utilizan exclusivamente para autenticar personal autorizado y proteger la información del reporte.
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsPrivacyNoticeOpen((value) => !value)}
+                className="mt-2 font-bold text-amber-200 underline decoration-amber-200/50 underline-offset-2 hover:text-amber-100"
+                aria-expanded={isPrivacyNoticeOpen}
+                aria-controls="admin-privacy-notice"
+              >
+                {isPrivacyNoticeOpen ? 'Ocultar aviso de privacidad' : 'Consultar aviso de privacidad'}
+              </button>
+              {isPrivacyNoticeOpen && (
+                <div id="admin-privacy-notice" className="mt-3 space-y-2 border-l-2 border-[#A57F2C] pl-3 text-left">
+                  <p><strong className="text-white">Responsable y finalidad:</strong> IMSS-Bienestar trata el identificador de usuario y los registros técnicos de acceso para autenticación, seguridad y auditoría del panel administrativo.</p>
+                  <p><strong className="text-white">Protección y conservación:</strong> La contraseña se valida de forma segura y no forma parte de los datos del reporte. La información se conserva conforme a las políticas institucionales aplicables.</p>
+                  <p><strong className="text-white">Derechos:</strong> Puedes solicitar acceso, rectificación, cancelación u oposición al tratamiento de tus datos mediante los canales institucionales de IMSS-Bienestar.</p>
+                </div>
+              )}
+            </div>
           </motion.form>
         </div>
       ) : (

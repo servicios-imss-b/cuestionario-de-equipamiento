@@ -27,6 +27,7 @@ interface ChartsProps {
   topFaltantes: TopFaltanteChart[];
   cluesGeo?: CluesGeoItem[];
   resultado?: DataRow[];
+  showExports?: boolean;
 }
 
 const PIE_COLORS = ['#1A6B5E', '#A57F2C'];
@@ -888,7 +889,7 @@ function MapModal({ onClose, porEntidad, cluesGeo = [] }: {
   );
 }
 
-function InsumoZeroFinder({ resultado = [] }: { resultado?: DataRow[] }) {
+function InsumoZeroFinder({ resultado = [], showExports = false }: { resultado?: DataRow[]; showExports?: boolean }) {
   const [query, setQuery] = useState('');
   const [selectedEntidad, setSelectedEntidad] = useState('');
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
@@ -1169,7 +1170,7 @@ function InsumoZeroFinder({ resultado = [] }: { resultado?: DataRow[] }) {
         )}
       </div>
 
-      <div className="mt-3 flex justify-end">
+      {showExports && <div className="mt-3 flex justify-end">
         <button
           type="button"
           onClick={handleExport}
@@ -1179,7 +1180,7 @@ function InsumoZeroFinder({ resultado = [] }: { resultado?: DataRow[] }) {
           <Download className="h-3.5 w-3.5" />
           Descargar Excel
         </button>
-      </div>
+      </div>}
 
       {selectedInsumoKey ? (
         <div className="mt-4 rounded-2xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-4">
@@ -1272,6 +1273,7 @@ export function StatCards({
   cluesGeo = [],
   topFaltantes = [],
   resultado = [],
+  showExports = false,
 }: ChartsProps) {
   const [showMap, setShowMap] = useState(false);
 
@@ -1342,7 +1344,7 @@ export function StatCards({
         </ChartCard>
       </div>
 
-      <InsumoZeroFinder resultado={resultado} />
+      <InsumoZeroFinder resultado={resultado} showExports={showExports} />
 
       {showMap && <MapModal onClose={() => setShowMap(false)} porEntidad={porEntidad} cluesGeo={cluesGeo} />}
     </>
@@ -1441,15 +1443,15 @@ export function AvanceSummaryCards({
 export function AvanceCharts({
   porEntidad,
   globalPct,
-  avancePorEntidad,
+  llenadoCompletoPorEntidad,
   tablaEntidades,
 }: {
   porEntidad: EntidadChart[];
   globalPct: number;
-  avancePorEntidad: Array<{
+  llenadoCompletoPorEntidad: Array<{
     entidad: string;
     totalUnidades: number;
-    unidadesRespondieron: number;
+    unidadesCompletas: number;
     porcentaje: number;
   }>;
   tablaEntidades: Array<{
@@ -1461,10 +1463,18 @@ export function AvanceCharts({
   }>;
 }) {
   void globalPct;
-  const sortedAvance = [...avancePorEntidad].sort((a, b) => b.porcentaje - a.porcentaje);
+  const [percentageRange, setPercentageRange] = useState('all');
+  const matchesPercentageRange = (percentage: number) => {
+    if (percentageRange === 'all') return true;
+    if (percentageRange === 'under-10') return percentage < 10;
+    if (percentageRange === '100') return percentage >= 100;
+    const lowerBound = Number(percentageRange);
+    return percentage >= lowerBound && percentage < lowerBound + 10;
+  };
+  const sortedAvance = [...llenadoCompletoPorEntidad].sort((a, b) => b.porcentaje - a.porcentaje);
   const totalEsperadas = sortedAvance.reduce((sum, item) => sum + item.totalUnidades, 0);
-  const totalRespondieron = sortedAvance.reduce((sum, item) => sum + item.unidadesRespondieron, 0);
-  const globalAvance = totalEsperadas > 0 ? +((totalRespondieron / totalEsperadas) * 100).toFixed(1) : 0;
+  const totalCompletas = sortedAvance.reduce((sum, item) => sum + item.unidadesCompletas, 0);
+  const globalAvance = totalEsperadas > 0 ? +((totalCompletas / totalEsperadas) * 100).toFixed(1) : 0;
   const avgAvance = sortedAvance.length
     ? +(sortedAvance.reduce((sum, item) => sum + item.porcentaje, 0) / sortedAvance.length).toFixed(1)
     : 0;
@@ -1472,11 +1482,11 @@ export function AvanceCharts({
   const maxAvance = sortedAvance[0]?.porcentaje ?? 0;
   const minAvance = sortedAvance[sortedAvance.length - 1]?.porcentaje ?? 0;
 
-  const avanceData = sortedAvance.map((row) => ({
+  const avanceData = sortedAvance.filter((row) => matchesPercentageRange(row.porcentaje)).map((row) => ({
     entidad: row.entidad.length > 12 ? row.entidad.slice(0, 12) + '.' : row.entidad,
     entidadFull: row.entidad,
     pct: row.porcentaje,
-    unidadesRespondieron: row.unidadesRespondieron,
+    unidadesCompletas: row.unidadesCompletas,
     totalUnidades: row.totalUnidades,
   }));
 
@@ -1492,11 +1502,31 @@ export function AvanceCharts({
       consultorios: Number(row.consultorios ?? 0),
     }))
     .filter((row) => row.entidadFull)
+    .filter((row) => matchesPercentageRange(row.pct))
     .sort((a, b) => b.pct - a.pct)
     .slice(0, 20);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+      <div className="col-span-full flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Filtrar porcentajes</p>
+          <p className="text-xs text-gray-400">Rangos de avance y llenado</p>
+        </div>
+        <select
+          value={percentageRange}
+          onChange={(event) => setPercentageRange(event.target.value)}
+          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none focus:border-imss-green focus:ring-2 focus:ring-imss-green/20"
+          aria-label="Filtrar porcentajes por rango"
+        >
+          <option value="all">Todos los porcentajes</option>
+          <option value="under-10">Menor a 10%</option>
+          {[10, 20, 30, 40, 50, 60, 70, 80, 90].map((lowerBound) => (
+            <option key={lowerBound} value={lowerBound}>{lowerBound}% - {lowerBound + 9.9}%</option>
+          ))}
+          <option value="100">100%</option>
+        </select>
+      </div>
       <div className="space-y-4">
         <ChartCard
           title="Cobertura CLUES por entidad mayor al 80 %"
@@ -1508,7 +1538,7 @@ export function AvanceCharts({
 
         <ChartCard
           title="Avance por entidad sobre unidades"
-          subtitle="Porcentaje de unidades que respondieron respecto al total esperado"
+          subtitle="Porcentaje de unidades completamente llenadas respecto al total esperado"
           className="h-full"
         >
           <div className="space-y-4">
@@ -1542,10 +1572,10 @@ export function AvanceCharts({
                     (payload?.[0] as { payload?: { entidadFull?: string } } | undefined)?.payload?.entidadFull ?? _label
                   }
                   formatter={(v: unknown, _name: unknown, item: unknown) => {
-                    const payload = (item as { payload?: { unidadesRespondieron?: number; totalUnidades?: number } } | undefined)?.payload;
-                    const respondieron = Number(payload?.unidadesRespondieron ?? 0).toLocaleString('es-MX');
+                    const payload = (item as { payload?: { unidadesCompletas?: number; totalUnidades?: number } } | undefined)?.payload;
+                    const completas = Number(payload?.unidadesCompletas ?? 0).toLocaleString('es-MX');
                     const esperadas = Number(payload?.totalUnidades ?? 0).toLocaleString('es-MX');
-                    return [`${v}% (${respondieron}/${esperadas})`, '% avance'];
+                    return [`${v}% (${completas}/${esperadas})`, 'Unidades completas'];
                   }}
                   cursor={{ fill: '#F0FDFA' }}
                 />

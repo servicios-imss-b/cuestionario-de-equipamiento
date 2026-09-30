@@ -73,6 +73,101 @@ const supabase = supabaseUrl && supabaseAnonKey
     })
   : null;
 
+const REPORT_CACHE_DB = 'imss-reporte-cache';
+const REPORT_CACHE_STORE = 'reportes';
+const REPORT_CACHE_KEY = 'tablas-formulario-v4';
+
+function nextReportCutExpiry(now = Date.now()): number {
+  const mexicoOffsetMs = 6 * 60 * 60 * 1000;
+  const mexicoNow = new Date(now - mexicoOffsetMs);
+  const year = mexicoNow.getUTCFullYear();
+  const month = mexicoNow.getUTCMonth();
+  const day = mexicoNow.getUTCDate();
+
+  for (const [hour, minute] of [[11, 27], [14, 27], [17, 2]]) {
+    const candidate = Date.UTC(year, month, day, hour + 6, minute);
+    if (candidate > now) return candidate;
+  }
+  return Date.UTC(year, month, day + 1, 17, 27);
+}
+
+interface ReportCacheEntry {
+  expiresAt: number;
+  fetchedAt: string;
+  tablas: TablasFormulario;
+}
+
+function openReportCache(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(REPORT_CACHE_DB, 1);
+    const timeout = window.setTimeout(() => reject(new Error('Tiempo de espera de caché agotado')), 1500);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(REPORT_CACHE_STORE)) {
+        request.result.createObjectStore(REPORT_CACHE_STORE);
+      }
+    };
+    request.onsuccess = () => {
+      window.clearTimeout(timeout);
+      resolve(request.result);
+    };
+    request.onerror = () => {
+      window.clearTimeout(timeout);
+      reject(request.error);
+    };
+    request.onblocked = () => {
+      window.clearTimeout(timeout);
+      reject(new Error('Caché bloqueada'));
+    };
+  });
+}
+
+async function readReportCache(): Promise<ReportCacheEntry | null> {
+  if (typeof indexedDB === 'undefined') return null;
+  try {
+    const database = await openReportCache();
+    const entry = await new Promise<ReportCacheEntry | undefined>((resolve, reject) => {
+      const transaction = database.transaction(REPORT_CACHE_STORE, 'readonly');
+      const request = transaction.objectStore(REPORT_CACHE_STORE).get(REPORT_CACHE_KEY);
+      const timeout = window.setTimeout(() => reject(new Error('Lectura de caché agotada')), 1500);
+      request.onsuccess = () => {
+        window.clearTimeout(timeout);
+        resolve(request.result as ReportCacheEntry | undefined);
+      };
+      request.onerror = () => {
+        window.clearTimeout(timeout);
+        reject(request.error);
+      };
+    });
+    database.close();
+    return entry && entry.expiresAt > Date.now() ? entry : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeReportCache(entry: ReportCacheEntry): Promise<void> {
+  if (typeof indexedDB === 'undefined') return;
+  try {
+    const database = await openReportCache();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(REPORT_CACHE_STORE, 'readwrite');
+      const timeout = window.setTimeout(() => reject(new Error('Escritura de caché agotada')), 1500);
+      transaction.objectStore(REPORT_CACHE_STORE).put(entry, REPORT_CACHE_KEY);
+      transaction.oncomplete = () => {
+        window.clearTimeout(timeout);
+        resolve();
+      };
+      transaction.onerror = () => {
+        window.clearTimeout(timeout);
+        reject(transaction.error);
+      };
+    });
+    database.close();
+  } catch {
+    // La caché es una optimización; el reporte sigue funcionando sin ella.
+  }
+}
+
 export interface StorageUsageRow {
   tabla: string;
   bytes: number;
@@ -154,25 +249,26 @@ function scheduleColumns(selectedTurn: unknown, storedSchedule: unknown) {
 // La normalizacion reemplazo la tabla plana `respuestas` por unidades/consultorios/
 // respuestas_equipamiento; reconstruimos filas con la forma de SupabaseRow para no
 // tocar el resto del pipeline de agregacion mas abajo.
-async function fetchAllRows<T>(client: NonNullable<typeof supabase>, table: string, select: string): Promise<T[]> {
-  const pageSize = 1000;
-  const out: T[] = [];
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await client.from(table).select(select).range(from, from + pageSize - 1);
-    if (error) throw new Error(`No fue posible consultar ${table} de Supabase: ${error.message}`);
-    const page = (data ?? []) as T[];
-    out.push(...page);
-    if (page.length < pageSize) break;
+async function fetchNormalizedRows(
+  client: NonNullable<typeof supabase>,
+  forceRefresh = false,
+): Promise<{ rows: SupabaseRow[]; generatedAt?: string }> {
+  const compactResult = await client.rpc('reporte_fuente_compacta', { p_forzar: forceRefresh });
+  if (compactResult.error || !compactResult.data) {
+    throw new Error(`No fue posible consultar el último corte del reporte: ${compactResult.error?.message ?? 'sin datos'}`);
   }
-  return out;
-}
 
-async function fetchNormalizedRows(client: NonNullable<typeof supabase>): Promise<SupabaseRow[]> {
-  const [unidadesData, consultoriosData, equipamientoData] = await Promise.all([
-    fetchAllRows<any>(client, 'unidades', '*, usuarios(email, nombre)'),
-    fetchAllRows<any>(client, 'consultorios', '*, usuarios(email, nombre)'),
-    fetchAllRows<any>(client, 'respuestas_equipamiento', '*'),
-  ]);
+  const compact = compactResult.data as { unidades?: any[]; consultorios?: any[]; generado_en?: string };
+  const unidadesData = compact.unidades ?? [];
+  const consultoriosData = compact.consultorios ?? [];
+  const generatedAt = compact.generado_en;
+  const equipamientoData = consultoriosData.flatMap((office) =>
+    Object.entries(office.equipamiento ?? {}).map(([questionId, amount]) => ({
+      consultorio_id: office.id,
+      pregunta_id: Number(questionId),
+      cantidad: Number(amount),
+    })),
+  );
 
   const equipmentByOffice = new Map<number, Map<number, number>>();
   for (const eq of equipamientoData) {
@@ -258,10 +354,10 @@ async function fetchNormalizedRows(client: NonNullable<typeof supabase>): Promis
     return row;
   });
 
-  return [...unidadRows, ...consultorioRows];
+  return { rows: [...unidadRows, ...consultorioRows], generatedAt };
 }
 
-async function fetchLiveAdvanceTables(): Promise<{
+async function fetchLiveAdvanceTables(forceRefresh = false): Promise<{
   baseAn: DataRow[];
   resultado: DataRow[];
   resumen: DataRow[];
@@ -284,7 +380,8 @@ async function fetchLiveAdvanceTables(): Promise<{
       entity: normalize(unit.entity),
     }]),
   );
-  const rows: SupabaseRow[] = await fetchNormalizedRows(supabase);
+  const source = await fetchNormalizedRows(supabase, forceRefresh);
+  const rows = source.rows;
 
   const configByClues = new Map<string, SupabaseRow>();
   const officeByKey = new Map<string, SupabaseRow>();
@@ -353,12 +450,13 @@ async function fetchLiveAdvanceTables(): Promise<{
     const config = configByClues.get(clues);
     const officeConfig = officeByKey.get(key);
     const schedules = scheduleColumns(officeConfig?.turno_consultorio, officeConfig?.turno);
+    const includesUnitData = office === 0 || office === 1;
     const result: DataRow = resultByOffice.get(key) ?? {
       entidad: unit.entity,
       clues_imb: clues,
       nombre_de_la_unidad: unit.name,
-      internet: config?.internet ?? null,
-      consultorios: config?.consultorios ?? null,
+      internet: includesUnitData ? config?.internet ?? null : null,
+      consultorios: includesUnitData ? config?.consultorios ?? null : null,
       consultorio: office,
       Matutino: schedules.Matutino,
       Vespertino: schedules.Vespertino,
@@ -368,7 +466,7 @@ async function fetchLiveAdvanceTables(): Promise<{
       medicos_generales: officeConfig?.medicos_generales ?? null,
       ...Object.fromEntries(reportUnitQuestions.map((question) => [
         `${questionKey(question.name)}_unidad`,
-        config?.[`p_${question.id}`] ?? null,
+        includesUnitData ? config?.[`p_${question.id}`] ?? null : null,
       ])),
     };
     resultByOffice.set(key, result);
@@ -453,7 +551,7 @@ async function fetchLiveAdvanceTables(): Promise<{
       .filter((column) => !unitQuestionColumns.includes(column) || row.consultorio === 0 || row.consultorio === 1)
       .filter((column) => row[column] === null || row[column] === undefined)
       .map((column) => column.replace(/_consultorio$/, ''));
-    if (row.consultorio === 1) {
+    if (row.consultorio === 0 || row.consultorio === 1) {
       if (configByClues.get(normalize(row.clues_imb))?.internet !== 'SI'
         && configByClues.get(normalize(row.clues_imb))?.internet !== 'NO') {
         missing.unshift('¿Cuenta con servicio de Internet?');
@@ -612,7 +710,7 @@ async function fetchLiveAdvanceTables(): Promise<{
     (row) => row.tipo_registro === 'consultorio' || !cluesWithConsultorios.has(normalize(row.clues_imb)),
   ).map((row) => applyCorrectedUnitName(row as unknown as DataRow));
 
-  const scriptLastRunAt = rows
+  const scriptLastRunAt = source.generatedAt ?? rows
     .map((row) => row.fecha_registro)
     .filter((value): value is string => Boolean(value))
     .sort()
@@ -652,10 +750,18 @@ async function fetchCluesGeo(): Promise<CluesGeoItem[]> {
   ) as CluesGeoItem[];
 }
 
-export async function cargarTablasFormulario(): Promise<{ tablas: TablasFormulario; fetchedAt: Date }> {
+export async function cargarTablasFormulario(forceRefresh = false): Promise<{ tablas: TablasFormulario; fetchedAt: Date }> {
+  if (!forceRefresh) {
+    const cached = await Promise.race([
+      readReportCache(),
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 2000)),
+    ]);
+    if (cached) return { tablas: cached.tablas, fetchedAt: new Date(cached.fetchedAt) };
+  }
+
   const [cluesGeo, liveTables] = await Promise.all([
     fetchCluesGeo(),
-    fetchLiveAdvanceTables(),
+    fetchLiveAdvanceTables(forceRefresh),
   ]);
 
   const correctedCluesGeo = cluesGeo.map((row) => ({
@@ -686,5 +792,11 @@ export async function cargarTablasFormulario(): Promise<{ tablas: TablasFormular
     faltantes: liveTables.faltantes,
   };
 
-  return { tablas, fetchedAt: new Date() };
+  const fetchedAt = liveTables.scriptLastRunAt ? new Date(liveTables.scriptLastRunAt) : new Date();
+  await writeReportCache({
+    expiresAt: nextReportCutExpiry(),
+    fetchedAt: fetchedAt.toISOString(),
+    tablas,
+  });
+  return { tablas, fetchedAt };
 }
