@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Database, Building2, Layers3, AlertTriangle, LayoutGrid, Gauge, FileSearch, HardDrive } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Database, Building2, Layers3, AlertTriangle, LayoutGrid, Gauge, FileSearch, HardDrive, KeyRound, X } from 'lucide-react';
 import { Header } from './components/Header';
 import { AvanceCharts, AvanceSummaryCards, StatCards } from './components/Charts';
 import { DataTable } from './components/DataTable';
@@ -150,10 +150,13 @@ function formatCellValue(value: unknown, key?: string): string {
 export default function App() {
   const [mainTab, setMainTab] = useState<MainTabKey>('infraestructura');
   const [dataTab, setDataTab] = useState<DataTabKey>('clues');
-  const [crudaUnlocked, setCrudaUnlocked] = useState(false);
-  const [almacenamientoUnlocked, setAlmacenamientoUnlocked] = useState(false);
+  const crudaUnlocked = false;
+  const almacenamientoUnlocked = false;
   const [downloadsUnlocked, setDownloadsUnlocked] = useState(false);
-  const [logoClickCount, setLogoClickCount] = useState(0);
+  const logoClickCount = useRef(0);
+  const [showDownloadAccess, setShowDownloadAccess] = useState(false);
+  const [downloadPassword, setDownloadPassword] = useState('');
+  const [downloadPasswordError, setDownloadPasswordError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [baseAn, setBaseAn] = useState<DataRow[]>([]);
@@ -371,16 +374,24 @@ export default function App() {
   };
 
   const handleLogoClick = () => {
-    setLogoClickCount((prev) => {
-      const next = prev + 1;
-      if (next >= 6) setCrudaUnlocked(true);
-      if (next >= 10) setAlmacenamientoUnlocked(true);
-      if (next >= 20) {
-        setDownloadsUnlocked(true);
-        return 0;
-      }
-      return next;
-    });
+    logoClickCount.current += 1;
+    if (logoClickCount.current < 2) return;
+    logoClickCount.current = 0;
+    setShowDownloadAccess(true);
+    setDownloadPassword('');
+    setDownloadPasswordError('');
+  };
+
+  const handleDownloadAccess = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (downloadPassword !== '318091') {
+      setDownloadPasswordError('Contraseña incorrecta');
+      return;
+    }
+    setDownloadsUnlocked(true);
+    setShowDownloadAccess(false);
+    setDownloadPassword('');
+    setDownloadPasswordError('');
   };
 
   const uniqueCluesCount = new Set(
@@ -538,6 +549,45 @@ export default function App() {
         title={headerContent.title}
         subtitle={headerContent.subtitle}
       />
+
+      {showDownloadAccess && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4" role="dialog" aria-modal="true" aria-labelledby="download-access-title">
+          <form onSubmit={handleDownloadAccess} className="relative w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setShowDownloadAccess(false)}
+              className="absolute right-3 top-3 p-1.5 text-gray-400 hover:text-gray-700"
+              aria-label="Cerrar acceso a descargas"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-emerald-50 text-imss-green">
+              <KeyRound className="h-5 w-5" />
+            </div>
+            <h2 id="download-access-title" className="text-lg font-bold text-gray-900">Habilitar descargas</h2>
+            <p className="mt-1 text-sm text-gray-500">Ingresa la contraseña para activar Excel y Parquet durante esta sesión.</p>
+            <label className="mt-5 block text-sm font-semibold text-gray-700">
+              Contraseña
+              <input
+                autoFocus
+                type="password"
+                inputMode="numeric"
+                value={downloadPassword}
+                onChange={(event) => {
+                  setDownloadPassword(event.target.value);
+                  setDownloadPasswordError('');
+                }}
+                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:border-imss-green focus:ring-2 focus:ring-imss-green/20"
+                required
+              />
+            </label>
+            {downloadPasswordError && <p className="mt-2 text-sm font-semibold text-rose-600" role="alert">{downloadPasswordError}</p>}
+            <button type="submit" className="mt-5 w-full rounded-md bg-imss-green px-4 py-2.5 text-sm font-bold text-white hover:bg-imss-green-mid">
+              Activar descargas
+            </button>
+          </form>
+        </div>
+      )}
 
       <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
         {loading ? (
