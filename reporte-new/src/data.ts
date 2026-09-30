@@ -2,6 +2,12 @@ import { createClient } from '@supabase/supabase-js';
 import units from '../../src/data/units.json';
 import type { CluesGeoItem, DataRow, TablasFormulario } from './types';
 import { reportOfficeQuestions, reportUnitQuestions } from './reportQuestions';
+import {
+  DISABLED_CAUSE_CONFIRMATION_QUESTION,
+  GENERAL_DOCTOR_COUNT_QUESTION,
+  OFFICE_ENABLED_QUESTION,
+  TURN_SELECTION_QUESTION,
+} from '../../src/data/officeConfiguration';
 
 interface ExpectedUnit {
   clues: string;
@@ -447,6 +453,25 @@ async function fetchLiveAdvanceTables(): Promise<{
       .filter((column) => !unitQuestionColumns.includes(column) || row.consultorio === 0 || row.consultorio === 1)
       .filter((column) => row[column] === null || row[column] === undefined)
       .map((column) => column.replace(/_consultorio$/, ''));
+    if (row.consultorio === 1) {
+      if (configByClues.get(normalize(row.clues_imb))?.internet !== 'SI'
+        && configByClues.get(normalize(row.clues_imb))?.internet !== 'NO') {
+        missing.unshift('¿Cuenta con servicio de Internet?');
+      }
+    }
+
+    const office = officeByKey.get(`${normalize(row.clues_imb)}::${row.consultorio}`);
+    if (office?.habilitado === null || office?.habilitado === undefined) {
+      missing.push(OFFICE_ENABLED_QUESTION);
+    } else if (office.habilitado === false) {
+      if (!String(office.causas_inhabilitacion ?? '').trim()) missing.push(DISABLED_CAUSE_CONFIRMATION_QUESTION);
+    } else {
+      if (!office.turno_consultorio) missing.push(TURN_SELECTION_QUESTION);
+      if (office.medicos_generales === null || office.medicos_generales === undefined) {
+        missing.push(GENERAL_DOCTOR_COUNT_QUESTION);
+      }
+    }
+
     if (!missing.length) return [];
     return [{
       entidad: row.entidad,
