@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Database, Building2, Layers3, AlertTriangle, LayoutGrid, Gauge, FileSearch, HardDrive, KeyRound, X } from 'lucide-react';
+import { Database, Building2, Layers3, AlertTriangle, LayoutGrid, Gauge, FileSearch, HardDrive, X } from 'lucide-react';
 import { Header } from './components/Header';
 import { AvanceCharts, AvanceSummaryCards, StatCards } from './components/Charts';
 import { DataTable } from './components/DataTable';
@@ -10,6 +10,7 @@ import type { DashboardStats, DataRow, EntidadChart, InternetPieItem, TopFaltant
 
 type DataTabKey = 'cruda' | 'clues' | 'estado' | 'faltantes' | 'tabla-avance' | 'tabla-entidades' | 'tabla-unidades' | 'llenado-completo-entidad' | 'faltantes-estados' | 'tabla-faltantes-estados';
 type MainTabKey = 'infraestructura' | 'avance' | 'pendientes' | 'almacenamiento';
+const DOWNLOAD_ACCESS_LOGO = 'https://imssbienestar.gob.mx/assets/img/imb_b.svg';
 
 function toText(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -150,8 +151,8 @@ function formatCellValue(value: unknown, key?: string): string {
 export default function App() {
   const [mainTab, setMainTab] = useState<MainTabKey>('infraestructura');
   const [dataTab, setDataTab] = useState<DataTabKey>('clues');
-  const crudaUnlocked = false;
-  const almacenamientoUnlocked = false;
+  const [crudaUnlocked, setCrudaUnlocked] = useState(false);
+  const [almacenamientoUnlocked, setAlmacenamientoUnlocked] = useState(false);
   const [downloadsUnlocked, setDownloadsUnlocked] = useState(false);
   const logoClickCount = useRef(0);
   const [showDownloadAccess, setShowDownloadAccess] = useState(false);
@@ -375,11 +376,16 @@ export default function App() {
 
   const handleLogoClick = () => {
     logoClickCount.current += 1;
-    if (logoClickCount.current < 2) return;
-    logoClickCount.current = 0;
-    setShowDownloadAccess(true);
-    setDownloadPassword('');
-    setDownloadPasswordError('');
+    if (logoClickCount.current === 2) {
+      setShowDownloadAccess(true);
+      setDownloadPassword('');
+      setDownloadPasswordError('');
+    }
+    if (logoClickCount.current >= 6) setCrudaUnlocked(true);
+    if (logoClickCount.current >= 10) {
+      setAlmacenamientoUnlocked(true);
+      logoClickCount.current = 0;
+    }
   };
 
   const handleDownloadAccess = (event: React.FormEvent) => {
@@ -561,9 +567,15 @@ export default function App() {
             >
               <X className="h-5 w-5" />
             </button>
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-emerald-50 text-imss-green">
-              <KeyRound className="h-5 w-5" />
-            </div>
+            <button
+              type="button"
+              onClick={handleLogoClick}
+              className="mb-4 flex h-12 items-center rounded-md bg-emerald-50 px-3"
+              aria-label="IMSS Bienestar"
+              title="IMSS Bienestar"
+            >
+              <img src={DOWNLOAD_ACCESS_LOGO} alt="IMSS Bienestar" className="h-8 w-auto" />
+            </button>
             <h2 id="download-access-title" className="text-lg font-bold text-gray-900">Habilitar descargas</h2>
             <p className="mt-1 text-sm text-gray-500">Ingresa la contraseña para activar Excel y Parquet durante esta sesión.</p>
             <label className="mt-5 block text-sm font-semibold text-gray-700">
