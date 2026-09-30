@@ -861,6 +861,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   let totalQuestions = 0;
   let answeredCount = 0;
   const officeProgress: Record<number, { percentage: number; missing: number; total: number }> = {};
+  const internetAnswered = generalData.hasInternet === 'SI' || generalData.hasInternet === 'NO' ? 1 : 0;
 
   for (let c = 1; c <= (generalData.configuredOffices ?? 0); c++) {
     const enabledAnswer = answers[`${c}__${OFFICE_ENABLED_QUESTION}`];
@@ -908,11 +909,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   if (generalData.configuredOffices === 0) {
     const unitQuestions = EQUIPMENT_CATALOG.filter((item) => isUnitLevelEquipmentQuestion(item.name));
-    totalQuestions = unitQuestions.length;
+    totalQuestions = unitQuestions.length + 1;
     answeredCount = unitQuestions.filter((item) => {
       const answer = answers[`1__${item.name}`];
       return answer?.value !== null && answer?.value !== undefined;
-    }).length;
+    }).length + internetAnswered;
+  } else {
+    totalQuestions += 1;
+    answeredCount += internetAnswered;
   }
 
   const progressPercentage = totalQuestions > 0

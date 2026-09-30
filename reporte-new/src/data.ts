@@ -13,6 +13,30 @@ const correctedUnitNames = new Map(
   (units as ExpectedUnit[]).map((unit) => [normalize(unit.clues), String(unit.name ?? '').trim()]),
 );
 
+function officeConfigurationCounts(office: SupabaseRow | undefined) {
+  if (!office || office.habilitado === null || office.habilitado === undefined) {
+    return { expected: 1, responded: 0 };
+  }
+
+  if (office.habilitado === false) {
+    return {
+      expected: 2,
+      responded: 1 + (String(office.causas_inhabilitacion ?? '').trim() ? 1 : 0),
+    };
+  }
+
+  const turn = String(office.turno_consultorio ?? '').trim();
+  const operationalTurns = turn === 'Ambos' ? 2 : turn ? 1 : 0;
+  const scheduleAndDoctorQuestions = operationalTurns * 14;
+  return {
+    expected: 3 + scheduleAndDoctorQuestions,
+    responded: 1
+      + (turn ? 1 : 0)
+      + (office.medicos_generales !== null && office.medicos_generales !== undefined ? 1 : 0)
+      + (turn ? scheduleAndDoctorQuestions : 0),
+  };
+}
+
 interface SupabaseRow {
   fecha_registro: string | null;
   tipo_registro: 'unidad' | 'respuesta' | 'consultorio' | 'horario';
@@ -448,12 +472,25 @@ async function fetchLiveAdvanceTables(): Promise<{
   for (const [clues, unit] of expectedByClues) {
     const response = responsesByClues.get(clues);
     const config = configByClues.get(clues);
-    const responded = response?.responded ?? 0;
     const configuredOffices = config?.consultorios == null ? null : Number(config.consultorios);
     const officeCount = configuredOffices ?? response?.maxOffice ?? null;
+    const officeConfiguration = officeCount === null
+      ? { expected: 0, responded: 0 }
+      : Array.from({ length: officeCount }, (_, index) => index + 1)
+        .reduce((counts, office) => {
+          const current = officeConfigurationCounts(officeByKey.get(`${clues}::${office}`));
+          return {
+            expected: counts.expected + current.expected,
+            responded: counts.responded + current.responded,
+          };
+        }, { expected: 0, responded: 0 });
+    const internetExpected = 1;
+    const internetResponded = config?.internet === 'SI' || config?.internet === 'NO' ? 1 : 0;
+    const responded = (response?.responded ?? 0) + officeConfiguration.responded + internetResponded;
+    const answeredWithValue = (response?.answeredWithValue ?? 0) + officeConfiguration.responded + internetResponded;
     const expected = officeCount === null
-      ? reportUnitQuestions.length
-      : officeCount * EQUIPMENT_QUESTION_COUNT + reportUnitQuestions.length;
+      ? reportUnitQuestions.length + internetExpected
+      : officeCount * EQUIPMENT_QUESTION_COUNT + reportUnitQuestions.length + internetExpected + officeConfiguration.expected;
     const percentage = expected > 0 ? Math.min(100, +((responded / expected) * 100).toFixed(1)) : 0;
 
     tablaUnidadesAvance.push({
@@ -476,7 +513,7 @@ async function fetchLiveAdvanceTables(): Promise<{
     };
     completion.consultorios += officeCount ?? 0;
     completion.respondidas += responded;
-    completion.respondidasConValor += response?.answeredWithValue ?? 0;
+    completion.respondidasConValor += answeredWithValue;
     completion.esperadas += expected;
     completion.unidades += 1;
     if (officeCount === 0) completion.unidadesCero += 1;
