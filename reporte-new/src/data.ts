@@ -75,7 +75,7 @@ const supabase = supabaseUrl && supabaseAnonKey
 
 const REPORT_CACHE_DB = 'imss-reporte-cache';
 const REPORT_CACHE_STORE = 'reportes';
-const REPORT_CACHE_KEY = 'tablas-formulario-v4';
+const REPORT_CACHE_KEY = 'tablas-formulario-v5';
 
 function nextReportCutExpiry(now = Date.now()): number {
   const mexicoOffsetMs = 6 * 60 * 60 * 1000;
@@ -322,9 +322,12 @@ async function fetchNormalizedRows(
       return [`p_${question.id}`, storedValue ?? null];
     })),
     }));
+  const normalizedUnitByClues = new Map<string, SupabaseRow>(
+    unidadRows.map((row) => [normalize(row.clues_imb), row]),
+  );
 
   const consultorioRows: SupabaseRow[] = consultoriosData.map((c) => {
-    const unidad = unidadByClues.get(normalize(c.unidad_clues));
+    const unidad = normalizedUnitByClues.get(normalize(c.unidad_clues));
     const row: SupabaseRow = {
       usuario_id: c.usuario_id ?? null,
       consultorio_id: c.id ?? null,
@@ -350,6 +353,14 @@ async function fetchNormalizedRows(
     const equipment = equipmentByOffice.get(c.id);
     for (const question of reportOfficeQuestions) {
       row[`p_${question.id}`] = equipment?.get(Number(question.id)) ?? null;
+    }
+    for (const question of reportUnitQuestions) {
+      const questionId = Number(question.id);
+      row[`p_${question.id}`] = Number(c.numero) === 1
+        ? unidad?.[`p_${question.id}`]
+          ?? unitEquipmentFallback.get(normalize(c.unidad_clues))?.get(questionId)
+          ?? null
+        : null;
     }
     return row;
   });
