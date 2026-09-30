@@ -132,6 +132,14 @@ function formatLastUpdateLabel(date: Date): string {
 function formatCellValue(value: unknown, key?: string): string {
   if (value === null || value === undefined || value === '') return '-';
   if (typeof value === 'boolean') return value ? 'Si' : 'No';
+  if (key && /fecha/i.test(key) && typeof value !== 'number') {
+    const parsed = parseDateValue(value);
+    if (parsed) {
+      return new Intl.DateTimeFormat('es-MX', {
+        timeZone: 'America/Mexico_City', dateStyle: 'short', timeStyle: 'short', hour12: true,
+      }).format(parsed).replace(',', '').replace('a. m.', 'a.m.').replace('p. m.', 'p.m.');
+    }
+  }
   if (typeof value === 'number') {
     // Detecta serial de fecha Excel en columnas cuyo nombre contiene 'fecha'
     if (key && /fecha/i.test(key) && value > 25569 && value < 73050) {
@@ -367,7 +375,9 @@ export default function App() {
       .filter((key) => key !== 'tipo_registro' && (includeFechaRegistro || key !== 'fecha_registro'))
       .map((key) => ({
       key,
-      label: QUESTION_COLUMN_LABELS.get(key) ?? EQUIPMENT_COLUMN_LABELS.get(key) ?? key,
+      label: key === 'fecha_registro'
+        ? 'Fecha y hora'
+        : QUESTION_COLUMN_LABELS.get(key) ?? EQUIPMENT_COLUMN_LABELS.get(key) ?? key,
       render: (row: DataRow) => QUESTION_COLUMN_LABELS.has(key) && row[key] == null
         ? ''
         : formatCellValue(row[key], key),
@@ -677,8 +687,8 @@ export default function App() {
                         showExports={downloadsUnlocked}
                         description="Registros normalizados de unidades y consultorios tal como se consultan en Supabase."
                         data={baseAn}
-                        columns={tableColumns(baseAn, false, ['pregunta', 'valor'])}
-                        exportColumns={tableColumns(baseAn, true, ['pregunta', 'valor'])}
+                        columns={tableColumns(baseAn, true, ['pregunta', 'valor', 'consultorio_id'])}
+                        exportColumns={tableColumns(baseAn, true, ['pregunta', 'valor', 'consultorio_id'])}
                       />
                     )}
 
