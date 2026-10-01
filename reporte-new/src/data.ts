@@ -75,7 +75,7 @@ const supabase = supabaseUrl && supabaseAnonKey
 
 const REPORT_CACHE_DB = 'imss-reporte-cache';
 const REPORT_CACHE_STORE = 'reportes';
-const REPORT_CACHE_KEY = 'tablas-formulario-v6';
+const REPORT_CACHE_KEY = 'tablas-formulario-v7';
 
 function nextReportCutExpiry(now = Date.now()): number {
   const mexicoOffsetMs = 6 * 60 * 60 * 1000;
@@ -262,6 +262,9 @@ async function fetchNormalizedRows(
   const unidadesData = compact.unidades ?? [];
   const consultoriosData = compact.consultorios ?? [];
   const generatedAt = compact.generado_en;
+  const unidadByClues = new Map<string, any>(
+    unidadesData.map((unidad) => [normalize(unidad.clues_imb), unidad]),
+  );
   const equipamientoData = consultoriosData.flatMap((office) =>
     Object.entries(office.equipamiento ?? {}).map(([questionId, amount]) => ({
       consultorio_id: office.id,
@@ -281,6 +284,8 @@ async function fetchNormalizedRows(
   const unitEquipmentFallback = new Map<string, Map<number, number>>();
   for (const office of [...consultoriosData].sort((first, second) => Number(first.numero) - Number(second.numero))) {
     const clues = normalize(office.unidad_clues);
+    const unit = unidadByClues.get(clues);
+    if (Number(unit?.consultorios) === 1 && Number(office.numero) > 1) continue;
     if (!unitEquipmentFallback.has(clues)) unitEquipmentFallback.set(clues, new Map());
     const fallback = unitEquipmentFallback.get(clues)!;
     const equipment = equipmentByOffice.get(office.id);
@@ -290,10 +295,6 @@ async function fetchNormalizedRows(
       if (value !== undefined && !fallback.has(questionId)) fallback.set(questionId, value);
     }
   }
-
-  const unidadByClues = new Map<string, any>(
-    unidadesData.map((unidad) => [normalize(unidad.clues_imb), unidad]),
-  );
 
   const unidadRows: SupabaseRow[] = unidadesData.map((u) => ({
     usuario_id: u.usuario_id ?? null,
@@ -393,6 +394,9 @@ async function fetchLiveAdvanceTables(forceRefresh = false): Promise<{
   );
   const source = await fetchNormalizedRows(supabase, forceRefresh);
   const rows = source.rows;
+  const reportRows = rows.filter((row) => row.tipo_registro !== 'consultorio'
+    || Number(row.consultorios) !== 1
+    || Number(row.consultorio) <= 1);
 
   const configByClues = new Map<string, SupabaseRow>();
   const officeByKey = new Map<string, SupabaseRow>();
@@ -420,7 +424,7 @@ async function fetchLiveAdvanceTables(forceRefresh = false): Promise<{
     responsesByClues.set(clues, current);
   };
 
-  for (const row of rows) {
+  for (const row of reportRows) {
     const clues = normalize(row.clues_imb);
     if (!clues || !expectedByClues.has(clues)) continue;
     if (row.tipo_registro === 'unidad') {
