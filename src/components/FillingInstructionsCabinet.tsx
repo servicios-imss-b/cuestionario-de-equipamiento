@@ -95,10 +95,9 @@ export const FillingInstructionsCabinet: React.FC = () => {
                 <p className="mb-3 text-sm font-extrabold uppercase text-white">Características de la Unidad Médica</p>
                 <div className="rounded-md border border-white/15 bg-black/20 p-3">
                   <p className="mb-2 text-xs font-bold">¿Cuenta con servicio de Internet?</p>
-                  <div className="grid grid-cols-3 gap-1 text-[10px] font-bold">
+                  <div className="grid grid-cols-2 gap-1 text-[10px] font-bold">
                     <span className="rounded-md bg-emerald-500 px-2 py-2 text-center text-white">SÍ</span>
                     <span className="rounded-md bg-white/15 px-2 py-2 text-center">NO</span>
-                    <span className="rounded-md bg-white/15 px-2 py-2 text-center">PENDIENTE</span>
                   </div>
                 </div>
                 <div className="mt-3 border-t border-white/15 pt-3">

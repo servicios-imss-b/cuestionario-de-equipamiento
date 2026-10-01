@@ -21,7 +21,8 @@ export const CompletedUnitModal: React.FC = () => {
     setPhase('review');
   }, [completedUnitName]);
 
-  if (!completedUnitName || !selectedUnit) return null;
+  const internetAnswered = generalData.hasInternet === 'SI' || generalData.hasInternet === 'NO';
+  if (!completedUnitName || !selectedUnit || !internetAnswered || !stats.isFullySaved) return null;
 
   const displayValue = (value: number | null | undefined) => value ?? 'Sin captura';
 

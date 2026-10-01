@@ -87,7 +87,7 @@ interface AppContextType {
   handleUnlockUnit: () => void;
   handleConfigureOffices: (count: number) => void;
   handleConfirmZeroOffices: () => Promise<void>;
-  handleSetInternet: (status: 'SI' | 'NO' | 'PENDIENTE') => Promise<void>;
+  handleSetInternet: (status: 'SI' | 'NO') => Promise<void>;
   handleSetTurn: (officeNumber: number, turn: TurnType) => Promise<void>;
   handleSaveAnswer: (officeNumber: number, question: string, value: number, silentSuccess?: boolean) => Promise<void>;
   confirmCompletedUnit: (onSaved?: () => void) => Promise<boolean>;
@@ -472,6 +472,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const confirmCompletedUnit = useCallback(async (onSaved?: () => void) => {
     if (!selectedUnit) return false;
+    if (generalData.hasInternet !== 'SI' && generalData.hasInternet !== 'NO') {
+      addToast('Falta responder Internet', 'warning', 'Seleccione SÍ o NO antes de completar la unidad.');
+      return false;
+    }
     try {
       const isLive = await checkServerHealth();
       if (!isLive) throw new Error('Sin conexión con Supabase');
@@ -588,7 +592,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [selectedUnit, selectedEntity, user, generalData, addToast, refreshPendingCount, finishCompletedUnit]);
 
   // General fields update
-  const handleSetInternet = useCallback(async (status: 'SI' | 'NO' | 'PENDIENTE') => {
+  const handleSetInternet = useCallback(async (status: 'SI' | 'NO') => {
     if (!selectedUnit) return;
     const updated: UnitGeneralData = {
       ...generalData,
@@ -919,9 +923,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     answeredCount += internetAnswered;
   }
 
-  const progressPercentage = totalQuestions > 0
+  const calculatedProgressPercentage = totalQuestions > 0
       ? Number(((answeredCount / totalQuestions) * 100).toFixed(1))
       : 0;
+  const progressPercentage = internetAnswered
+    ? calculatedProgressPercentage
+    : Math.min(calculatedProgressPercentage, 99.9);
   const pendingCount = totalQuestions - answeredCount;
   const isFullySaved = totalQuestions > 0 && answeredCount === totalQuestions;
 

@@ -33,6 +33,9 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
 
   if (!selectedUnit) return null;
 
+  const canShowUnitDetails = stats.isFullySaved
+    && (generalData.hasInternet === 'SI' || generalData.hasInternet === 'NO');
+
   // Find all missing questions across all configured offices
   const missingQuestionsList: { office: number; question: string }[] = [];
   for (let c = 1; c <= (generalData.configuredOffices ?? 0); c++) {
@@ -72,7 +75,7 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
         <span className="flex shrink-0 items-center gap-2 text-[11px] text-zinc-300">
           <span>Consultorios: <strong className="text-amber-300">{generalData.configuredOffices}</strong></span>
           <span>Progreso: <strong className="text-emerald-300">{stats.progressPercentage}%</strong></span>
-          {stats.progressPercentage === 100 && (
+          {canShowUnitDetails && (
             <span
               role="button"
               tabIndex={0}
@@ -132,7 +135,7 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
               ¿Cuenta con servicio de Internet?
             </label>
             <div className="grid grid-cols-3 gap-1.5 pt-1">
-              {(['SI', 'NO', 'PENDIENTE'] as const).map((opt) => (
+              {(['SI', 'NO'] as const).map((opt) => (
                 <button
                   key={opt}
                   type="button"
@@ -247,7 +250,7 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
 
         {/* Right: Missing Questions Dropdown and completed unit details */}
         <div className="flex flex-wrap items-center gap-2 self-end md:self-center">
-          {stats.progressPercentage === 100 && (
+          {canShowUnitDetails && (
             <button
               type="button"
               onClick={() => setCompletedUnitName(selectedUnit.name)}

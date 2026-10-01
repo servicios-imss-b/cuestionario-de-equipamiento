@@ -459,6 +459,7 @@ async function fetchLiveAdvanceTables(forceRefresh = false): Promise<{
     if (!unit) return null;
     const key = `${clues}::${office}`;
     const config = configByClues.get(clues);
+    if (Number(config?.consultorios) === 1 && office > 1) return null;
     const officeConfig = officeByKey.get(key);
     const schedules = scheduleColumns(officeConfig?.turno_consultorio, officeConfig?.turno);
     const includesUnitData = office === 0 || office === 1;
