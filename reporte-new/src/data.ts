@@ -75,7 +75,7 @@ const supabase = supabaseUrl && supabaseAnonKey
 
 const REPORT_CACHE_DB = 'imss-reporte-cache';
 const REPORT_CACHE_STORE = 'reportes';
-const REPORT_CACHE_KEY = 'tablas-formulario-v5';
+const REPORT_CACHE_KEY = 'tablas-formulario-v6';
 
 function nextReportCutExpiry(now = Date.now()): number {
   const mexicoOffsetMs = 6 * 60 * 60 * 1000;
