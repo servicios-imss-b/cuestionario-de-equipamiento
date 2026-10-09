@@ -12,7 +12,7 @@ interface QuestionnaireTableProps {
 }
 
 export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableContainerRef }) => {
-  const { generalData, answers } = useApp();
+  const { generalData, answers, isCompletedUnitLocked } = useApp();
   const [selectedOffice, setSelectedOffice] = useState(1);
   const [viewMode, setViewMode] = useState<'pending' | 'all'>('pending');
 
@@ -28,7 +28,7 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
     return answer?.value !== null && answer?.value !== undefined;
   }).length;
   const pendingQuestions = questionCount - answeredQuestions;
-  const questionsForView = viewMode === 'pending'
+  const questionsForView = viewMode === 'pending' && !isCompletedUnitLocked
     ? officeQuestions.filter((item) => {
         const answer = answers[`${activeOffice}__${item.name}`];
         if (isUnitLevelEquipmentQuestion(item.name)) {
@@ -223,7 +223,7 @@ export const QuestionnaireTable: React.FC<QuestionnaireTableProps> = ({ tableCon
                     officeNumber={activeOffice}
                     question={item.name}
                     turn={generalData.turns[activeOffice] || ''}
-                    disabled={isReadOnlyUnitQuestion}
+                    disabled={isReadOnlyUnitQuestion || isCompletedUnitLocked}
                   />
                 </tr>
               );

@@ -64,6 +64,8 @@ interface AppContextType {
   setSelectedUnit: (unit: MedicalUnit | null) => void;
   isUnitLocked: boolean;
   setIsUnitLocked: (locked: boolean) => void;
+  isCompletedUnitLocked: boolean;
+  unlockCompletedUnit: () => void;
   generalData: UnitGeneralData;
   answers: Record<string, QuestionAnswer>;
   isOnline: boolean;
@@ -135,7 +137,9 @@ function isQuestionnaireComplete(
     const enabledAnswer = currentAnswers[`${officeNumber}__${OFFICE_ENABLED_QUESTION}`];
     const requiredQuestions = [
       ...getRequiredOfficeConfigurationQuestions(data.turns[officeNumber] || '', enabledAnswer?.value),
-      ...EQUIPMENT_CATALOG.map((item) => item.name)
+      ...EQUIPMENT_CATALOG
+        .filter((item) => officeNumber === 1 || !isUnitLevelEquipmentQuestion(item.name))
+        .map((item) => item.name)
     ];
     return requiredQuestions.every((question) => {
       if (question === TURN_SELECTION_QUESTION) return Boolean(data.turns[officeNumber]);
@@ -149,6 +153,11 @@ function isQuestionnaireComplete(
   });
 }
 
+function isUnitFullyAnswered(data: UnitGeneralData, currentAnswers: Record<string, QuestionAnswer>) {
+  const hasInternetAnswer = data.hasInternet === 'SI' || data.hasInternet === 'NO';
+  return data.configuredOffices !== null && hasInternetAnswer && isQuestionnaireComplete(data, currentAnswers);
+}
+
 const AppContext = createContext<AppContextType | null>(null);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -157,6 +166,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [user, setUser] = useState<UserRegistration | null>(null);
   const [selectedUnit, setSelectedUnit] = useState<MedicalUnit | null>(null);
   const [isUnitLocked, setIsUnitLocked] = useState<boolean>(false);
+  const [unlockedCompletedUnitClues, setUnlockedCompletedUnitClues] = useState<string | null>(null);
   const [generalData, setGeneralData] = useState<UnitGeneralData>(defaultGeneralData);
   const [answers, setAnswers] = useState<Record<string, QuestionAnswer>>({});
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
@@ -169,6 +179,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [completedUnitName, setCompletedUnitName] = useState<string | null>(null);
   const [conflictData, setConflictData] = useState<ConflictData | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isCompletedUnitLocked = Boolean(
+    selectedUnit
+    && isUnitFullyAnswered(generalData, answers)
+    && unlockedCompletedUnitClues !== selectedUnit.clues
+  );
+
+  useEffect(() => {
+    if (unlockedCompletedUnitClues && !isUnitFullyAnswered(generalData, answers)) {
+      setUnlockedCompletedUnitClues(null);
+    }
+  }, [generalData, answers, unlockedCompletedUnitClues]);
+
+  const unlockCompletedUnit = useCallback(() => {
+    if (selectedUnit && isUnitFullyAnswered(generalData, answers)) {
+      setUnlockedCompletedUnitClues(selectedUnit.clues);
+    }
+  }, [selectedUnit, generalData, answers]);
 
   const addToast = useCallback((title: string, type: ToastMessage['type'] = 'info', description?: string) => {
     const id = 'current-notification';
@@ -519,6 +546,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Office configuration
   const handleConfigureOffices = useCallback((count: number) => {
+    if (isCompletedUnitLocked) return;
     const safeCount = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
     if (safeCount === 0 && Object.keys(answers).length > 0) {
       setIsZeroOfficesModalOpen(true);
@@ -558,10 +586,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           addToast('Consultorios guardados localmente', 'warning', 'Se sincronizarán al reconectar.');
         });
     }
-  }, [selectedUnit, selectedEntity, user, generalData, answers, addToast, refreshPendingCount, finishCompletedUnit]);
+  }, [selectedUnit, selectedEntity, user, generalData, answers, addToast, refreshPendingCount, finishCompletedUnit, isCompletedUnitLocked]);
 
   const handleConfirmZeroOffices = useCallback(async () => {
-    if (!selectedUnit) return;
+    if (!selectedUnit || isCompletedUnitLocked) return;
     try {
       const localAnswers = await getLocalAnswersForUnit(selectedUnit.clues);
       const unitAnswers = Object.values(localAnswers).filter((answer) => isUnitLevelEquipmentQuestion(answer.question));
@@ -589,11 +617,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error) {
       addToast('No se eliminaron las respuestas', 'error', 'La base de datos no confirmó la operación. Intenta nuevamente.');
     }
-  }, [selectedUnit, selectedEntity, user, generalData, addToast, refreshPendingCount, finishCompletedUnit]);
+  }, [selectedUnit, selectedEntity, user, generalData, addToast, refreshPendingCount, finishCompletedUnit, isCompletedUnitLocked]);
 
   // General fields update
   const handleSetInternet = useCallback(async (status: 'SI' | 'NO') => {
-    if (!selectedUnit) return;
+    if (!selectedUnit || isCompletedUnitLocked) return;
     const updated: UnitGeneralData = {
       ...generalData,
       entidad: selectedEntity || selectedUnit.entity || generalData.entidad,
@@ -612,11 +640,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       refreshPendingCount();
       addToast('Internet guardado localmente', 'warning', 'Se sincronizará al reconectar.');
     }
-  }, [selectedUnit, selectedEntity, user, generalData, addToast, refreshPendingCount]);
+  }, [selectedUnit, selectedEntity, user, generalData, addToast, refreshPendingCount, isCompletedUnitLocked]);
 
   // Turn selection for an office
   const handleSetTurn = useCallback(async (officeNumber: number, turn: TurnType) => {
-    if (!selectedUnit) return;
+    if (!selectedUnit || isCompletedUnitLocked) return;
     const wasComplete = isQuestionnaireComplete(generalData, answers);
     const previousTurn = generalData.turns[officeNumber];
     const removedTurns: OperationalTurn[] = turn === 'Ambos' || !previousTurn || previousTurn === turn
@@ -685,11 +713,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!wasComplete && isQuestionnaireComplete(updated, updatedAnswers)) {
       finishCompletedUnit(selectedUnit.name);
     }
-  }, [selectedUnit, selectedEntity, user, generalData, answers, addToast, refreshPendingCount, finishCompletedUnit]);
+  }, [selectedUnit, selectedEntity, user, generalData, answers, addToast, refreshPendingCount, finishCompletedUnit, isCompletedUnitLocked]);
 
   // Save Single Cell Answer (Enter key or Save button)
   const handleSaveAnswer = useCallback(async (officeNumber: number, question: string, value: number, silentSuccess = false) => {
-    if (!selectedUnit || !user || !selectedEntity) return;
+    if (!selectedUnit || !user || !selectedEntity || isCompletedUnitLocked) return;
 
     const isUnitLevelQuestion = isUnitLevelEquipmentQuestion(question);
     const answerOfficeNumber = isUnitLevelQuestion ? 1 : officeNumber;
@@ -826,7 +854,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (completesUnit) {
       finishCompletedUnit(selectedUnit.name);
     }
-  }, [selectedUnit, user, selectedEntity, answers, generalData, addToast, refreshPendingCount, finishCompletedUnit]);
+  }, [selectedUnit, user, selectedEntity, answers, generalData, addToast, refreshPendingCount, finishCompletedUnit, isCompletedUnitLocked]);
 
   const setEditingCell = useCallback((key: string | null) => {
     setEditingCellKey(key);
@@ -926,7 +954,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const calculatedProgressPercentage = totalQuestions > 0
       ? Number(((answeredCount / totalQuestions) * 100).toFixed(1))
       : 0;
-  const progressPercentage = internetAnswered
+  const progressPercentage = internetAnswered && generalData.configuredOffices !== null
     ? calculatedProgressPercentage
     : Math.min(calculatedProgressPercentage, 99.9);
   const pendingCount = totalQuestions - answeredCount;
@@ -945,6 +973,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedUnit,
         isUnitLocked,
         setIsUnitLocked,
+        isCompletedUnitLocked,
+        unlockCompletedUnit,
         generalData,
         answers,
         isOnline,

@@ -16,7 +16,8 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
     handleConfigureOffices,
     setCompletedUnitName,
     stats,
-    answers
+    answers,
+    isCompletedUnitLocked
   } = useApp();
 
   const [officeCountInput, setOfficeCountInput] = useState(generalData.configuredOffices === null ? '' : String(generalData.configuredOffices));
@@ -140,6 +141,7 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
                   key={opt}
                   type="button"
                   onClick={() => handleSetInternet(opt)}
+                  disabled={isCompletedUnitLocked}
                   className={`py-1.5 rounded-lg text-xs font-bold transition-all ${
                     generalData.hasInternet === opt
                       ? opt === 'SI'
@@ -170,6 +172,7 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
               inputMode="numeric"
               pattern="[0-9]*"
               value={officeCountInput}
+              disabled={isCompletedUnitLocked}
               onChange={(event) => {
                 const value = event.target.value;
                 if (value === '' || /^\d+$/.test(value)) {
@@ -188,7 +191,7 @@ export const GeneralQuestions: React.FC<GeneralQuestionsProps> = ({ onScrollToQu
             />
             <button
               type="submit"
-              disabled={officeCountInput === ''}
+              disabled={officeCountInput === '' || isCompletedUnitLocked}
               className="px-4 py-1.5 rounded-lg bg-[#A57F2C] hover:bg-[#b88f33] text-black font-bold text-xs shadow-md transition-all uppercase disabled:cursor-not-allowed disabled:opacity-40"
               id="btn-aplicar-consultorios"
             >

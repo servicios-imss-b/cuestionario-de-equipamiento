@@ -21,7 +21,7 @@ interface OfficeConfigurationPanelProps {
 const TURN_OPTIONS: TurnType[] = ['Matutino', 'Vespertino', 'Ambos'];
 
 export const OfficeConfigurationPanel: React.FC<OfficeConfigurationPanelProps> = ({ officeNumber }) => {
-  const { generalData, answers, handleSetTurn, handleSaveAnswer } = useApp();
+  const { generalData, answers, handleSetTurn, handleSaveAnswer, isCompletedUnitLocked } = useApp();
   const currentTurn = generalData.turns[officeNumber] === 'Matutino'
     || generalData.turns[officeNumber] === 'Vespertino'
     || generalData.turns[officeNumber] === 'Ambos'
@@ -124,7 +124,7 @@ export const OfficeConfigurationPanel: React.FC<OfficeConfigurationPanelProps> =
   };
 
   return (
-    <div className="w-full min-w-0 space-y-2 rounded-md border border-white/15 bg-black/20 p-2 text-left">
+    <fieldset disabled={isCompletedUnitLocked} className="w-full min-w-0 space-y-2 rounded-md border border-white/15 bg-black/20 p-2 text-left">
       <div className="flex items-center justify-between gap-2 rounded-md border border-white/15 bg-[#002F2A]/70 px-2 py-1">
         <p className="text-[10px] font-bold text-white">¿Está habilitado?</p>
         <div className="flex gap-1">
@@ -362,6 +362,6 @@ export const OfficeConfigurationPanel: React.FC<OfficeConfigurationPanelProps> =
           </div>
         </div>
       )}
-    </div>
+    </fieldset>
   );
 };

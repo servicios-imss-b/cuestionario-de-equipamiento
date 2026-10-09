@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, type FormEvent } from 'react';
 import { useApp } from '../context/AppContext.tsx';
-import { WifiOff, RefreshCw, Building2, Home, Lock } from 'lucide-react';
+import { WifiOff, RefreshCw, Building2, Home, Lock, KeyRound, X } from 'lucide-react';
 import { FillingInstructionsCabinet } from './FillingInstructionsCabinet.tsx';
 
 interface NavbarProps {
@@ -10,6 +10,9 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({ onSecretAccess }) => {
   const logoClickCount = useRef(0);
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [unlockError, setUnlockError] = useState('');
   const {
     activeSection,
     setActiveSection,
@@ -18,10 +21,31 @@ export const Navbar: React.FC<NavbarProps> = ({ onSecretAccess }) => {
     pendingSyncCount,
     triggerManualSync,
     selectedUnit,
+    isCompletedUnitLocked,
+    unlockCompletedUnit,
+    addToast,
     handleUnlockUnit,
   } = useApp();
 
   const handleLogoClick = () => {
+    if (isUnlockModalOpen) return;
+
+    if (isCompletedUnitLocked) {
+      logoClickCount.current += 1;
+      if (logoClickTimer.current) clearTimeout(logoClickTimer.current);
+      if (logoClickCount.current === 5) {
+        logoClickCount.current = 0;
+        setUnlockPassword('');
+        setUnlockError('');
+        setIsUnlockModalOpen(true);
+        return;
+      }
+      logoClickTimer.current = setTimeout(() => {
+        logoClickCount.current = 0;
+      }, 1800);
+      return;
+    }
+
     if (activeSection !== 'inicio') {
       logoClickCount.current = 0;
       if (logoClickTimer.current) clearTimeout(logoClickTimer.current);
@@ -40,6 +64,25 @@ export const Navbar: React.FC<NavbarProps> = ({ onSecretAccess }) => {
     logoClickTimer.current = setTimeout(() => {
       logoClickCount.current = 0;
     }, 1800);
+  };
+
+  const handleUnlockSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (unlockPassword !== '3180') {
+      setUnlockError('La contraseña no es correcta.');
+      return;
+    }
+    unlockCompletedUnit();
+    setIsUnlockModalOpen(false);
+    setUnlockPassword('');
+    setUnlockError('');
+    addToast('Unidad desbloqueada', 'success', 'Las preguntas vuelven a estar disponibles.');
+  };
+
+  const closeUnlockModal = () => {
+    setIsUnlockModalOpen(false);
+    setUnlockPassword('');
+    setUnlockError('');
   };
 
   return (
@@ -138,6 +181,39 @@ export const Navbar: React.FC<NavbarProps> = ({ onSecretAccess }) => {
           </div>
         </div>
       </div>
+      {isUnlockModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="completed-unit-unlock-title">
+          <form onSubmit={handleUnlockSubmit} className="relative w-full max-w-sm rounded-xl border border-amber-300/40 bg-[#002F2A] p-6 text-white shadow-2xl">
+            <button type="button" onClick={closeUnlockModal} className="absolute right-3 top-3 rounded p-1 text-zinc-300 hover:bg-white/10 hover:text-white" aria-label="Cerrar">
+              <X className="h-4 w-4" />
+            </button>
+            <div className="mb-5 flex items-center gap-3">
+              <KeyRound className="h-5 w-5 text-amber-300" />
+              <div>
+                <h2 id="completed-unit-unlock-title" className="text-sm font-bold">Desbloquear unidad completa</h2>
+                <p className="mt-1 text-xs text-zinc-300">{selectedUnit?.clues}</p>
+              </div>
+            </div>
+            <label htmlFor="completed-unit-password" className="mb-1.5 block text-xs font-semibold text-zinc-200">Contraseña</label>
+            <input
+              id="completed-unit-password"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={8}
+              autoFocus
+              value={unlockPassword}
+              onChange={(event) => setUnlockPassword(event.target.value)}
+              className="w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-amber-300 focus:ring-2 focus:ring-amber-400/30"
+            />
+            {unlockError && <p className="mt-2 text-xs text-rose-300" role="alert">{unlockError}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={closeUnlockModal} className="rounded-md border border-white/20 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10">Cancelar</button>
+              <button type="submit" className="rounded-md bg-[#A57F2C] px-3 py-2 text-xs font-bold text-black hover:bg-[#b88f33]">Desbloquear</button>
+            </div>
+          </form>
+        </div>
+      )}
     </header>
   );
 };
