@@ -30,7 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onSecretAccess }) => {
   const handleLogoClick = () => {
     if (isUnlockModalOpen) return;
 
-    if (isCompletedUnitLocked) {
+    if (isCompletedUnitLocked && activeSection === 'formulario' && selectedUnit) {
       logoClickCount.current += 1;
       if (logoClickTimer.current) clearTimeout(logoClickTimer.current);
       if (logoClickCount.current === 5) {
